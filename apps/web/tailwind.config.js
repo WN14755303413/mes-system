@@ -32,10 +32,30 @@ export default {
           '0%': { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(200%)' },
         },
+        // 右侧留白处缓慢漂移的极光色斑，给大面积浅色背景一点呼吸感
+        drift: {
+          '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+          '33%': { transform: 'translate(3%, -4%) scale(1.08)' },
+          '66%': { transform: 'translate(-3%, 3%) scale(0.95)' },
+        },
+        // 品牌墙上自左向右扫过的一道极淡光带
+        sweep: {
+          '0%': { transform: 'translateX(-30%) skewX(-12deg)', opacity: '0' },
+          '15%, 40%': { opacity: '0.22' },
+          '100%': { transform: 'translateX(130%) skewX(-12deg)', opacity: '0' },
+        },
+        'pulse-dot': {
+          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0.35', transform: 'scale(0.8)' },
+        },
       },
       animation: {
         'ken-burns': 'ken-burns 20s ease-in-out infinite alternate',
         shimmer: 'shimmer 2.5s ease-in-out infinite',
+        drift: 'drift 18s ease-in-out infinite',
+        'drift-slow': 'drift 26s ease-in-out infinite reverse',
+        sweep: 'sweep 7s ease-in-out infinite',
+        'pulse-dot': 'pulse-dot 2s ease-in-out infinite',
       },
     },
   },

@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -9,8 +10,13 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
 async function bootstrap(): Promise<void> {
   // 不缓冲日志：启动阶段的数据库连接问题需要立刻可见
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const logger = new Logger('Bootstrap');
+
+  // 信任最近一跳反代（生产是 nginx），否则 req.ip 恒为反代自身的地址，
+  // 基于 IP 的登录限流会把所有用户算作同一个来源，整个防护形同虚设。
+  // 只信任 1 跳：信任链再长，客户端就能自行伪造 X-Forwarded-For 绕过限流。
+  app.set('trust proxy', 1);
 
   // 安全响应头。CSP 在 M1 接入前端后按需放宽。
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));

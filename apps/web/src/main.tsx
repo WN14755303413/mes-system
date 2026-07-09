@@ -3,7 +3,8 @@ import { App as AntdApp, ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import { BrowserRouter } from 'react-router-dom';
+import { AppRoutes } from './router';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -27,11 +28,17 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           borderRadius: 6,
           fontSize: 14,
         },
+        components: {
+          // 登录卡片是半透明玻璃，输入框须为纯白才有足够对比度
+          Input: { colorBgContainer: '#ffffff' },
+        },
       }}
     >
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
         </QueryClientProvider>
       </AntdApp>
     </ConfigProvider>

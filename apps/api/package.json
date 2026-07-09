@@ -8,10 +8,10 @@
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:migrate": "node scripts/with-root-env.mjs npx prisma migrate dev",
+    "db:deploy": "node scripts/with-root-env.mjs npx prisma migrate deploy",
+    "db:seed": "node scripts/with-root-env.mjs npx tsx prisma/seed.ts",
+    "db:studio": "node scripts/with-root-env.mjs npx prisma studio"
   },
   "dependencies": {
     "@mes/shared": "*",

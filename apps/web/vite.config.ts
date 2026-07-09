@@ -11,6 +11,14 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),
+        // 直接指向源码，而不是 packages/shared/dist。
+        //
+        // shared 为了给 NestJS 用而编译成 CommonJS，其 index.js 用 __exportStar 转发导出，
+        // Rollup 静态分析不出具名导出，任何**运行时**值（如 evaluatePassword）都会报
+        // "is not exported by"。类型导入因为会被擦除，反而看不出问题。
+        //
+        // 让 Vite 直接编译 TS 源码，既绕开了这层 CJS 互操作，也让 shared 的改动能热更新。
+        '@mes/shared': path.resolve(__dirname, '../../packages/shared/src'),
       },
     },
     server: {

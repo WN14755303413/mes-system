@@ -18,9 +18,12 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      // 与 vite.config.ts 的 alias 保持一致：类型和运行时必须解析到同一份源码，
+      // 否则 tsc 读的是可能过期的 dist/*.d.ts，而 Vite 编译的是 src
+      "@mes/shared": ["../../packages/shared/src"]
     },
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../../packages/shared/src"]
 }

@@ -1,0 +1,2 @@
+# 该文件由 Prisma 维护，请勿手改
+provider = "postgresql"

@@ -65,3 +65,200 @@ export const Permission = {
 export type Permission = (typeof Permission)[keyof typeof Permission];
 
 export const ALL_PERMISSIONS = Object.values(Permission);
+
+/** 权限点的中文名与所属模块，seed 时写入 sys_permission，M3 的权限树直接读它。 */
+export const PERMISSION_META: Record<Permission, { name: string; module: string }> = {
+  'sys:user:read': { name: '查看用户', module: '系统管理' },
+  'sys:user:write': { name: '维护用户', module: '系统管理' },
+  'sys:role:read': { name: '查看角色', module: '系统管理' },
+  'sys:role:write': { name: '维护角色', module: '系统管理' },
+  'sys:dept:read': { name: '查看部门', module: '系统管理' },
+  'sys:dept:write': { name: '维护部门', module: '系统管理' },
+  'sys:audit:read': { name: '查看审计日志', module: '系统管理' },
+  'sys:integration:read': { name: '查看接口日志', module: '系统管理' },
+
+  'project:read': { name: '查看项目', module: '项目管理' },
+  'project:create': { name: '新建项目', module: '项目管理' },
+  'project:update': { name: '编辑项目', module: '项目管理' },
+  'project:delete': { name: '删除项目', module: '项目管理' },
+  'project:task:write': { name: '维护 WBS 任务', module: '项目管理' },
+  'project:risk:write': { name: '维护项目风险', module: '项目管理' },
+
+  'bom:read': { name: '查看 BOM', module: 'BOM 与图纸' },
+  'bom:write': { name: '维护 BOM', module: 'BOM 与图纸' },
+  'bom:release': { name: '发布/冻结 BOM 版本', module: 'BOM 与图纸' },
+  'drawing:read': { name: '查看图纸', module: 'BOM 与图纸' },
+  'drawing:write': { name: '维护图纸', module: 'BOM 与图纸' },
+  'drawing:download': { name: '下载图纸', module: 'BOM 与图纸' },
+
+  'material:read': { name: '查看物料', module: '物料齐套' },
+  'shortage:read': { name: '查看缺料与齐套', module: '物料齐套' },
+
+  'plan:read': { name: '查看生产计划', module: '生产执行' },
+  'plan:write': { name: '维护生产计划', module: '生产执行' },
+  'task:dispatch': { name: '派工', module: '生产执行' },
+  'task:report': { name: '报工', module: '生产执行' },
+  'task:exception': { name: '异常上报', module: '生产执行' },
+
+  'inspection:read': { name: '查看检验单', module: '质量管理' },
+  'inspection:write': { name: '维护检验单', module: '质量管理' },
+  'quality:issue:read': { name: '查看质量问题', module: '质量管理' },
+  'quality:issue:write': { name: '维护质量问题', module: '质量管理' },
+  'quality:issue:close': { name: '关闭质量问题', module: '质量管理' },
+
+  'debug:read': { name: '查看调试记录', module: '调试与验收' },
+  'debug:write': { name: '维护调试记录', module: '调试与验收' },
+  'acceptance:write': { name: '维护验收记录', module: '调试与验收' },
+
+  'dashboard:company': { name: '公司级看板', module: '数据看板' },
+  'dashboard:project': { name: '项目看板', module: '数据看板' },
+};
+
+/**
+ * 内置角色的默认权限与数据范围（业务方案 §7、技术方案 §3.6）。
+ *
+ * `'*'` 表示全部权限。这只是 seed 的初始值，上线后由管理员在 M3 的界面上调整，
+ * 不再回读本表。
+ */
+export const ROLE_PRESET: Record<
+  string,
+  { permissions: readonly Permission[] | '*'; dataScope: string }
+> = {
+  SYS_ADMIN: { permissions: '*', dataScope: 'ALL' },
+
+  EXECUTIVE: {
+    permissions: [
+      'project:read',
+      'bom:read',
+      'drawing:read',
+      'material:read',
+      'shortage:read',
+      'plan:read',
+      'inspection:read',
+      'quality:issue:read',
+      'debug:read',
+      'dashboard:company',
+      'dashboard:project',
+    ],
+    dataScope: 'ALL',
+  },
+
+  PROJECT_MANAGER: {
+    permissions: [
+      'project:read',
+      'project:create',
+      'project:update',
+      'project:task:write',
+      'project:risk:write',
+      'bom:read',
+      'drawing:read',
+      'drawing:download',
+      'material:read',
+      'shortage:read',
+      'plan:read',
+      'plan:write',
+      'inspection:read',
+      'quality:issue:read',
+      'quality:issue:write',
+      'quality:issue:close',
+      'debug:read',
+      'dashboard:project',
+    ],
+    dataScope: 'OWNED_PROJECT',
+  },
+
+  SALES: {
+    permissions: ['project:read', 'project:create', 'dashboard:project'],
+    dataScope: 'DEPT_ONLY',
+  },
+
+  DESIGNER: {
+    permissions: [
+      'project:read',
+      'bom:read',
+      'bom:write',
+      'bom:release',
+      'drawing:read',
+      'drawing:write',
+      'drawing:download',
+      'material:read',
+      'quality:issue:read',
+    ],
+    dataScope: 'DEPT_AND_BELOW',
+  },
+
+  PROCESS_ENGINEER: {
+    permissions: [
+      'project:read',
+      'bom:read',
+      'drawing:read',
+      'drawing:download',
+      'plan:read',
+      'inspection:read',
+      'quality:issue:read',
+      'quality:issue:write',
+    ],
+    dataScope: 'DEPT_AND_BELOW',
+  },
+
+  BUYER: {
+    permissions: ['project:read', 'bom:read', 'material:read', 'shortage:read'],
+    dataScope: 'DEPT_ONLY',
+  },
+
+  WAREHOUSE: {
+    permissions: ['project:read', 'material:read', 'shortage:read'],
+    dataScope: 'DEPT_ONLY',
+  },
+
+  PLANNER: {
+    permissions: [
+      'project:read',
+      'bom:read',
+      'material:read',
+      'shortage:read',
+      'plan:read',
+      'plan:write',
+      'task:dispatch',
+      'dashboard:project',
+    ],
+    dataScope: 'DEPT_AND_BELOW',
+  },
+
+  // 装配工只看得到派给自己的任务，以及任务关联的图纸与工艺
+  ASSEMBLER: {
+    permissions: ['drawing:read', 'task:report', 'task:exception'],
+    dataScope: 'SELF_ONLY',
+  },
+
+  COMMISSIONER: {
+    permissions: [
+      'drawing:read',
+      'debug:read',
+      'debug:write',
+      'task:report',
+      'task:exception',
+      'quality:issue:write',
+    ],
+    dataScope: 'SELF_ONLY',
+  },
+
+  INSPECTOR: {
+    permissions: [
+      'project:read',
+      'bom:read',
+      'drawing:read',
+      'inspection:read',
+      'inspection:write',
+      'quality:issue:read',
+      'quality:issue:write',
+      'quality:issue:close',
+    ],
+    dataScope: 'DEPT_AND_BELOW',
+  },
+
+  SERVICE: {
+    permissions: ['project:read', 'bom:read', 'drawing:read', 'debug:read', 'quality:issue:read'],
+    dataScope: 'DEPT_ONLY',
+  },
+};

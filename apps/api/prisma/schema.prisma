@@ -172,6 +172,39 @@ model RefreshToken {
   @@map("sys_refresh_token")
 }
 
+/// 忘记密码申请。
+///
+/// 本系统没有邮件服务，也刻意不做「邮件重置链接」——内部系统的账号绑定的是工号而非邮箱，
+/// 且邮件链接会新增一条可被钓鱼利用的攻击路径。改为人工核实：员工提交申请，
+/// 系统管理员在后台核对姓名/手机号后重置密码并下发临时密码（mustChangePassword=true）。
+///
+/// 刻意不存 userId：申请提交时不校验账号是否存在（防用户名枚举），
+/// 因此这里只保存用户填写的原始信息，由管理员在处理时人工匹配。
+model PasswordResetRequest {
+  id          String  @id @default(cuid())
+  username    String
+  displayName String  @map("display_name")
+  phone       String
+  reason      String?
+
+  /// PENDING / APPROVED / REJECTED
+  status String @default("PENDING")
+
+  ip        String?
+  userAgent String? @map("user_agent")
+
+  /// 处理人（管理员）的用户 id 与处理备注
+  handledBy   String?   @map("handled_by")
+  handledAt   DateTime? @map("handled_at")
+  handleNote  String?   @map("handle_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([username])
+  @@map("sys_password_reset_request")
+}
+
 /// 登录尝试记录。用于 IP 维度与账号维度的双重限流。
 model LoginAttempt {
   id       String   @id @default(cuid())

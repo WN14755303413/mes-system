@@ -18,6 +18,8 @@ export const ErrorCode = {
   CAPTCHA_REQUIRED: 'CAPTCHA_REQUIRED',
   CAPTCHA_INVALID: 'CAPTCHA_INVALID',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  UNAUTHENTICATED: 'UNAUTHENTICATED',
+  CSRF_INVALID: 'CSRF_INVALID',
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   VALIDATION_FAILED: 'VALIDATION_FAILED',
@@ -70,4 +72,74 @@ export interface CurrentUser {
   roles: string[];
   permissions: Permission[];
   dataScope: DataScope;
+}
+
+/**
+ * 登录失败时随错误一并返回的提示信息。
+ *
+ * 这里只暴露「本次登录尝试」维度的状态，不暴露账号是否存在——
+ * captchaRequired 由 IP+账号的失败计数决定，对不存在的账号同样会触发，
+ * 因此不能用它来枚举用户名。
+ */
+export interface LoginFailureDetail {
+  captchaRequired: boolean;
+  /** 账号锁定的剩余秒数；未锁定时为 0 */
+  lockedForSeconds: number;
+}
+
+export interface CaptchaResponse {
+  captchaId: string;
+  /** SVG 源码，前端直接内联渲染，避免再发一次图片请求 */
+  svg: string;
+}
+
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
+/**
+ * 忘记密码。本系统没有邮件服务，重置走「提交申请 → 管理员核实身份 → 后台重置」，
+ * 因此这里提交的是可供人工核对的身份信息，而非收件邮箱。
+ */
+export interface PasswordResetRequestPayload {
+  username: string;
+  displayName: string;
+  phone: string;
+  reason?: string;
+  captchaId: string;
+  captchaCode: string;
+}
+
+/** 密码强度下限，前后端共用一套规则，避免前端放行、后端拒绝的割裂体验。 */
+export const PASSWORD_MIN_LENGTH = 10;
+
+export interface PasswordStrength {
+  score: 0 | 1 | 2 | 3 | 4;
+  label: string;
+  issues: string[];
+}
+
+/**
+ * 评估密码强度。前端用它渲染强度条，后端用它做准入校验（score < 2 拒绝）。
+ * 注意：这只挡住弱密码，真正的防护来自 Argon2id 哈希与登录限流。
+ */
+export function evaluatePassword(pwd: string): PasswordStrength {
+  const issues: string[] = [];
+  if (pwd.length < PASSWORD_MIN_LENGTH) issues.push(`长度至少 ${PASSWORD_MIN_LENGTH} 位`);
+  if (!/[a-z]/.test(pwd)) issues.push('需包含小写字母');
+  if (!/[A-Z]/.test(pwd)) issues.push('需包含大写字母');
+  if (!/\d/.test(pwd)) issues.push('需包含数字');
+  if (!/[^\w\s]/.test(pwd)) issues.push('需包含符号');
+
+  const passed = 5 - issues.length;
+  // 长度是强度的主要来源，够长时额外加一档
+  const bonus = pwd.length >= 16 ? 1 : 0;
+  const score = Math.max(0, Math.min(4, passed - 1 + bonus)) as PasswordStrength['score'];
+
+  return {
+    score,
+    label: ['极弱', '弱', '一般', '强', '很强'][score],
+    issues,
+  };
 }

@@ -26,6 +26,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = '服务器内部错误';
     let errorCode: string | undefined;
+    let data: unknown = null;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -34,8 +35,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = body;
       } else if (typeof body === 'object' && body !== null) {
         const b = body as Record<string, unknown>;
-        message = (b.message as string) ?? exception.message;
+        // ValidationPipe 的 message 是字符串数组，取第一条即可，其余是同一次提交的其它字段
+        message = Array.isArray(b.message)
+          ? String(b.message[0])
+          : ((b.message as string) ?? exception.message);
         errorCode = b.errorCode as string | undefined;
+        data = b.data ?? null;
       }
     } else {
       // 非受控异常：完整信息只写日志
@@ -49,7 +54,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       code: status,
       message,
       errorCode,
-      data: null,
+      data,
       timestamp: new Date().toISOString(),
       path: req.url,
     });
