@@ -1,0 +1,257 @@
+// MES 系统数据模型
+// schema 由 DATABASE_URL 中的 ?schema=mes 指定，与 Supabase 自身的 auth/storage 表隔离。
+//
+// 本文件当前只含【系统域】。业务域（项目、BOM、工单、质量…）随各里程碑增量添加。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Transaction Pooler，运行时用
+  directUrl = env("DIRECT_URL") // 直连，migrate 用（迁移不能走 pooler）
+}
+
+// ============================================================
+//  组织与账号
+// ============================================================
+
+/// 部门。自引用树，`path` 存祖先链（如 /root/rd/mech/），用于 DEPT_AND_BELOW 数据权限的前缀匹配。
+model Dept {
+  id       String  @id @default(cuid())
+  name     String
+  code     String  @unique
+  parentId String? @map("parent_id")
+  path     String  @default("/")
+  sort     Int     @default(0)
+  enabled  Boolean @default(true)
+
+  parent   Dept?  @relation("DeptTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Dept[] @relation("DeptTree")
+  users    User[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@index([path])
+  @@map("sys_dept")
+}
+
+model User {
+  id          String @id @default(cuid())
+  username    String @unique
+  displayName String @map("display_name")
+
+  /// Argon2id 哈希。系统中任何位置都不保存明文密码，本字段无法反推出原密码。
+  passwordHash String @map("password_hash")
+
+  email  String? @unique
+  phone  String?
+  status String  @default("ACTIVE") // UserStatus
+
+  /// 为 true 时，除「修改密码」外的所有接口返回 403 PASSWORD_CHANGE_REQUIRED。
+  /// 初始管理员 seed 后即为 true，强制首次登录改密。
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+
+  /// 密码最后修改时间，用于「密码过期」策略与 token 失效判定。
+  passwordChangedAt DateTime @default(now()) @map("password_changed_at")
+
+  /// 账号锁定截止时间。连续登录失败达阈值后设置。
+  lockedUntil DateTime? @map("locked_until")
+
+  /// 连续失败次数，登录成功后清零。
+  failedLoginCount Int @default(0) @map("failed_login_count")
+
+  lastLoginAt DateTime? @map("last_login_at")
+  lastLoginIp String?   @map("last_login_ip")
+
+  /// 钉钉集成预留（建设方案 §11.1）。组织同步后，离职人员自动置为 DISABLED。
+  dingtalkUserId String? @unique @map("dingtalk_userid")
+
+  deptId String? @map("dept_id")
+  dept   Dept?   @relation(fields: [deptId], references: [id], onDelete: SetNull)
+
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([deptId])
+  @@index([status])
+  @@map("sys_user")
+}
+
+// ============================================================
+//  RBAC
+// ============================================================
+
+model Role {
+  id        String  @id @default(cuid())
+  code      String  @unique // BuiltinRole 或自定义
+  name      String
+  remark    String?
+  /// 该角色的数据可见范围（DataScope）。用户有多角色时取最宽松的一个。
+  dataScope String  @default("SELF_ONLY") @map("data_scope")
+  /// 内置角色不可删除
+  builtin   Boolean @default(false)
+  enabled   Boolean @default(true)
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sys_role")
+}
+
+model Permission {
+  id     String  @id @default(cuid())
+  /// 形如 `project:create`，与 packages/shared/src/permissions.ts 保持一致
+  code   String  @unique
+  name   String
+  module String
+  roles  RolePermission[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([module])
+  @@map("sys_permission")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("sys_user_role")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("sys_role_permission")
+}
+
+// ============================================================
+//  会话与登录防护
+// ============================================================
+
+/// Refresh token 只存哈希值。即使数据库泄露，也无法还原出可用的 token。
+/// 采用轮换（rotation）策略：每次刷新签发新 token 并作废旧的。
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  /// 同一登录会话的所有 token 共享一个 family id。
+  /// 检测到已撤销 token 被复用 → 判定为窃取 → 吊销整个 family。
+  familyId  String   @map("family_id")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?  @map("user_agent")
+  ip        String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("sys_refresh_token")
+}
+
+/// 登录尝试记录。用于 IP 维度与账号维度的双重限流。
+model LoginAttempt {
+  id       String   @id @default(cuid())
+  username String
+  ip       String
+  success  Boolean
+  reason   String?
+  userAgent String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([username, createdAt])
+  @@index([ip, createdAt])
+  @@map("sys_login_attempt")
+}
+
+// ============================================================
+//  审计与集成日志
+// ============================================================
+
+/// 操作审计（建设方案 §13）。图纸/BOM 的下载与预览单独记录。
+model AuditLog {
+  id         String  @id @default(cuid())
+  userId     String? @map("user_id")
+  username   String? // 冗余保存，用户删除后仍可追溯
+  action     String // 如 project.create / drawing.download
+  targetType String? @map("target_type")
+  targetId   String? @map("target_id")
+  /// 变更前后的 diff，仅记录发生变化的字段
+  changes    Json?
+  ip         String?
+  userAgent  String? @map("user_agent")
+  success    Boolean @default(true)
+  errorMsg   String? @map("error_msg")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@map("sys_audit_log")
+}
+
+/// 接口日志（建设方案 §11.3）。失败的记录构成「异常池」，支持重试与人工补偿。
+model IntegrationLog {
+  id           String    @id @default(cuid())
+  interfaceName String   @map("interface_name")
+  sourceSystem String    @map("source_system") // ERP / DINGTALK / ANT / MES
+  targetSystem String    @map("target_system")
+  requestSummary Json?   @map("request_summary")
+  responseSummary Json?  @map("response_summary")
+  success      Boolean
+  errorMsg     String?   @map("error_msg")
+  retryCount   Int       @default(0) @map("retry_count")
+  /// 待人工补偿的记录标记为 true
+  needsAttention Boolean @default(false) @map("needs_attention")
+  resolvedAt   DateTime? @map("resolved_at")
+  triggeredBy  String?   @map("triggered_by") // 操作人 id 或 "SCHEDULER"
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([interfaceName, createdAt])
+  @@index([success, needsAttention])
+  @@map("sys_integration_log")
+}
+
+// ============================================================
+//  编号序列（建设方案 §10.2）
+// ============================================================
+
+/// 单据流水号。用唯一约束 + 原子自增保证并发下不重号。
+/// scope 形如 "PJ-2026-ABC" 或 "QC-20260709"
+model CodeSequence {
+  id      String @id @default(cuid())
+  scope   String @unique
+  current Int    @default(0)
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sys_code_sequence")
+}

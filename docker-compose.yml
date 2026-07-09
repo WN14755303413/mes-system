@@ -1,0 +1,42 @@
+# 生产部署编排。数据库使用远端 Supabase，因此这里不含 postgres 服务。
+#
+# 用法：
+#   1. 在服务器上准备好 .env（内容参考 .env.example）
+#   2. docker compose up -d --build
+#
+# 注意：.env 中含数据库连接串与 JWT 密钥，文件权限应设为 600，且绝不入库。
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      API_PORT: 3000
+      # 生产强制 HTTPS Cookie
+      COOKIE_SECURE: "true"
+    expose:
+      - "3000"
+    networks:
+      - mes
+    # 不对宿主机暴露端口：外部流量一律经 web 服务的 nginx 进入
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    networks:
+      - mes
+
+networks:
+  mes:
+    driver: bridge
