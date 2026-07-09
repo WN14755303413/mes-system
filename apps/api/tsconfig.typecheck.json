@@ -1,0 +1,14 @@
+{
+  // 类型检查专用：覆盖面比构建更广，包含 prisma/seed.ts 这类不进 dist 的脚本。
+  //
+  // 构建配置（tsconfig.json）刻意把 rootDir 锁死在 src/，好让产物是 dist/main.js。
+  // 这里不产出文件，所以可以放宽 rootDir，把整个包都纳进来检查。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "./",
+    "incremental": false
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts", "scripts/**/*.mjs"],
+  "exclude": ["node_modules", "dist"]
+}

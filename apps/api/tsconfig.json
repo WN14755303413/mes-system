@@ -12,6 +12,10 @@
     "esModuleInterop": true,
     "sourceMap": true,
     "outDir": "./dist",
+    // 必须显式声明。否则 tsc 会把 rootDir 推断为所有输入文件的公共祖先目录，
+    // 一旦 src/ 之外出现 .ts（如 prisma/seed.ts），产物就会从 dist/main.js
+    // 变成 dist/src/main.js，Dockerfile 里的启动命令随即失效。
+    "rootDir": "./src",
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
@@ -26,6 +30,8 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*.ts", "prisma/**/*.ts"],
+  // 只编译服务端源码。seed.ts 由 tsx 直接运行，不进 dist；
+  // 它的类型检查交给 tsconfig.typecheck.json。
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
