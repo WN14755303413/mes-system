@@ -36,6 +36,10 @@ export const Permission = {
 
   // 物料齐套
   MATERIAL_READ: 'material:read',
+  MATERIAL_WRITE: 'material:write', // 物料主数据维护与导入
+  SUPPLY_WRITE: 'supply:write', // 采购/到货/库存数据导入与交期备注
+  REQUISITION_WRITE: 'requisition:write', // 发起领料/退料
+  REQUISITION_CONFIRM: 'requisition:confirm', // 仓库确认
   SHORTAGE_READ: 'shortage:read',
 
   // 生产执行
@@ -92,6 +96,10 @@ export const PERMISSION_META: Record<Permission, { name: string; module: string 
   'drawing:download': { name: '下载图纸', module: 'BOM 与图纸' },
 
   'material:read': { name: '查看物料', module: '物料齐套' },
+  'material:write': { name: '维护物料主数据', module: '物料齐套' },
+  'supply:write': { name: '维护供应数据', module: '物料齐套' },
+  'requisition:write': { name: '发起领料/退料', module: '物料齐套' },
+  'requisition:confirm': { name: '确认领料/退料', module: '物料齐套' },
   'shortage:read': { name: '查看缺料与齐套', module: '物料齐套' },
 
   'plan:read': { name: '查看生产计划', module: '生产执行' },
@@ -202,12 +210,25 @@ export const ROLE_PRESET: Record<
   },
 
   BUYER: {
-    permissions: ['project:read', 'bom:read', 'material:read', 'shortage:read'],
+    permissions: [
+      'project:read',
+      'bom:read',
+      'material:read',
+      'material:write',
+      'supply:write',
+      'shortage:read',
+    ],
     dataScope: 'DEPT_ONLY',
   },
 
   WAREHOUSE: {
-    permissions: ['project:read', 'material:read', 'shortage:read'],
+    permissions: [
+      'project:read',
+      'material:read',
+      'requisition:write',
+      'requisition:confirm',
+      'shortage:read',
+    ],
     dataScope: 'DEPT_ONLY',
   },
 
@@ -217,6 +238,7 @@ export const ROLE_PRESET: Record<
       'bom:read',
       'material:read',
       'shortage:read',
+      'requisition:write',
       'plan:read',
       'plan:write',
       'task:dispatch',

@@ -1,11 +1,17 @@
 import type { DataScope, UserStatus } from './enums';
 import type {
+  ArrivalType,
   BomStatus,
   DrawingStatus,
   IssuePriority,
   IssueStatus,
+  KittingRowStatus,
+  PoStatus,
+  RequisitionStatus,
+  RequisitionType,
   RiskLevel,
   RiskStatus,
+  SyncSource,
   TaskStatus,
 } from './enums';
 import type { Permission } from './permissions';
@@ -604,6 +610,303 @@ export interface UploadDrawingResponse {
   id: string;
   /** 因本次上传被自动作废的旧版本数。 */
   supersededCount: number;
+}
+
+// ============================================================
+//  M6 物料与齐套：物料主数据 / 供应数据（采购、到货、库存）/ 领料 / 齐套计算
+//
+//  一期 ERP 未接入，供应数据经「Excel 粘贴导入」（与 BOM 明细导入同一交互）
+//  进入。导入请求都是 JSON 行数组，由前端解析粘贴内容后提交。
+// ============================================================
+
+// ---- 物料主数据 ----
+
+export interface MaterialItem {
+  id: string;
+  code: string;
+  name: string;
+  spec: string | null;
+  unit: string;
+  category: string | null;
+  isStandard: boolean;
+  /** 长周期物料（业务方案 §8.3）。缺口且无在途时看板高亮预警。 */
+  isLongLead: boolean;
+  leadTimeDays: number | null;
+  syncSource: SyncSource;
+  syncedAt: string;
+  enabled: boolean;
+  remark: string | null;
+}
+
+export interface MaterialListQuery {
+  keyword?: string;
+  category?: string;
+  isLongLead?: boolean;
+  enabled?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface SaveMaterialRequest {
+  code: string;
+  name: string;
+  spec?: string | null;
+  unit?: string;
+  category?: string | null;
+  isStandard?: boolean;
+  isLongLead?: boolean;
+  leadTimeDays?: number | null;
+  enabled?: boolean;
+  remark?: string | null;
+}
+
+/** 批量导入物料（按 code upsert）。 */
+export interface ImportMaterialsRequest {
+  items: SaveMaterialRequest[];
+}
+
+export interface ImportResult {
+  created: number;
+  updated: number;
+}
+
+// ---- 采购订单（ERP 镜像）----
+
+export interface PoItemRow {
+  id: string;
+  orderId: string;
+  orderNo: string;
+  supplierName: string | null;
+  poStatus: PoStatus;
+  materialCode: string;
+  materialName: string | null;
+  quantity: number;
+  arrivedQuantity: number;
+  /** 在途 = quantity - arrivedQuantity（不小于 0）。 */
+  inTransitQuantity: number;
+  expectedDate: string | null;
+  /** 预计到货已过期且仍有在途。 */
+  delayed: boolean;
+  projectId: string | null;
+  projectCode: string | null;
+  riskNote: string | null;
+  syncedAt: string;
+}
+
+export interface PoItemListQuery {
+  projectId?: string;
+  materialCode?: string;
+  keyword?: string;
+  /** 只看有在途的行。 */
+  inTransitOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+/** 导入采购订单行（同 orderNo 归并为一张单；按 orderNo+materialCode upsert 明细）。 */
+export interface ImportPoRow {
+  orderNo: string;
+  supplierName?: string;
+  orderDate?: string;
+  materialCode: string;
+  materialName?: string;
+  quantity: number;
+  arrivedQuantity?: number;
+  expectedDate?: string;
+  /** 项目编号（PJ-…），空为通用采购。 */
+  projectCode?: string;
+}
+
+export interface ImportPoRequest {
+  items: ImportPoRow[];
+}
+
+/** 采购员在 MES 侧仅可维护交期与风险备注（业务方案 §7.6）。 */
+export interface UpdatePoItemRequest {
+  expectedDate?: string | null;
+  riskNote?: string | null;
+}
+
+// ---- 到货记录 ----
+
+export interface ArrivalRow {
+  id: string;
+  materialCode: string;
+  quantity: number;
+  type: ArrivalType;
+  arrivedAt: string;
+  orderNo: string | null;
+  projectId: string | null;
+  projectCode: string | null;
+  syncSource: SyncSource;
+  remark: string | null;
+}
+
+export interface ArrivalListQuery {
+  projectId?: string;
+  materialCode?: string;
+  type?: ArrivalType;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ImportArrivalRow {
+  /** 关联采购单号（可选）。匹配到明细行时自动累加其已到货量。 */
+  orderNo?: string;
+  materialCode: string;
+  quantity: number;
+  type?: ArrivalType;
+  arrivedAt: string;
+  projectCode?: string;
+  remark?: string;
+}
+
+export interface ImportArrivalsRequest {
+  items: ImportArrivalRow[];
+}
+
+// ---- 库存快照 ----
+
+export interface StockRow {
+  id: string;
+  materialCode: string;
+  materialName: string | null;
+  projectId: string | null;
+  projectCode: string | null;
+  quantity: number;
+  availableQuantity: number;
+  syncedAt: string;
+}
+
+export interface StockListQuery {
+  projectId?: string;
+  materialCode?: string;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ImportStockRow {
+  materialCode: string;
+  /** 项目编号，空为通用库存。 */
+  projectCode?: string;
+  quantity: number;
+  availableQuantity?: number;
+}
+
+/** 库存快照导入：整体覆盖现有快照（账务主权在 ERP，MES 不记增减账）。 */
+export interface ImportStocksRequest {
+  items: ImportStockRow[];
+}
+
+// ---- 领料/退料 ----
+
+export interface RequisitionRow {
+  id: string;
+  code: string;
+  projectId: string;
+  projectCode: string;
+  materialCode: string;
+  materialName: string | null;
+  quantity: number;
+  type: RequisitionType;
+  status: RequisitionStatus;
+  requestedByName: string | null;
+  confirmedByName: string | null;
+  confirmedAt: string | null;
+  remark: string | null;
+  createdAt: string;
+}
+
+export interface RequisitionListQuery {
+  projectId?: string;
+  status?: RequisitionStatus;
+  materialCode?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateRequisitionRequest {
+  projectId: string;
+  materialCode: string;
+  quantity: number;
+  type?: RequisitionType;
+  remark?: string | null;
+}
+
+// ---- 齐套计算 ----
+
+/**
+ * 齐套明细行（按物料编码聚合 BOM 需求后逐行计算）：
+ * 缺口 = 需求 − 已领净额 − 项目可用库存 − 通用可用库存 − 已到货未领 − 在途。
+ */
+export interface KittingRow {
+  materialCode: string;
+  materialName: string;
+  spec: string | null;
+  unit: string;
+  /** BOM 需求数量（同编码多行合并）。 */
+  required: number;
+  /** 已确认领料净额（领料 − 退料）。 */
+  issued: number;
+  /** 项目专用可用库存。 */
+  projectStock: number;
+  /** 计入的通用可用库存。 */
+  generalStock: number;
+  /** 已到货未入库（ARRIVED）。 */
+  arrivedNotInbound: number;
+  /** 采购在途。 */
+  inTransit: number;
+  /** 净缺口（不含在途）。>0 表示当前实物不足。 */
+  gap: number;
+  status: KittingRowStatus;
+  /** 在途覆盖时的最晚预计到货日。 */
+  latestExpectedDate: string | null;
+  /** 该物料在途行上的交期风险备注（汇总）。 */
+  riskNotes: string[];
+  /** 长周期物料标记；未建档时为 false 且 uncatalogued 为 true。 */
+  isLongLead: boolean;
+  /** 物料主数据未建档，提示补录。 */
+  uncatalogued: boolean;
+}
+
+/** 各数据源最后同步时间（业务方案 §5.1「看板必须标识数据同步时间」）。 */
+export interface KittingSyncInfo {
+  stockSyncedAt: string | null;
+  poSyncedAt: string | null;
+  arrivalSyncedAt: string | null;
+}
+
+export interface KittingResult {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  /** 需求来源 BOM 版本（最新已发布/冻结）；无可用版本时为 null，rows 为空。 */
+  bomId: string | null;
+  bomVersion: string | null;
+  totalRows: number;
+  fulfilledRows: number;
+  inTransitRows: number;
+  shortageRows: number;
+  /** 行齐套率 = 缺口≤0 的行数 / 总行数（0-100）。 */
+  kitRate: number;
+  /** 数量加权齐套率 = Σmin(可用,需求) / Σ需求（0-100）。 */
+  kitRateByQty: number;
+  /** 长周期且缺料且无在途的行数（高危预警）。 */
+  longLeadAlerts: number;
+  sync: KittingSyncInfo;
+  rows: KittingRow[];
+}
+
+/** 全项目齐套总览行（看板首页）。 */
+export interface KittingOverviewItem {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  bomVersion: string | null;
+  kitRate: number;
+  shortageRows: number;
+  longLeadAlerts: number;
 }
 
 /**

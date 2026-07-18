@@ -53,8 +53,8 @@ export const NAV_TREE: readonly NavItem[] = [
     permissions: ['material:read', 'shortage:read'],
     children: [
       { path: '/material/kitting', title: '齐套看板', permissions: ['shortage:read'] },
-      { path: '/material/shortage', title: '缺料清单', permissions: ['shortage:read'] },
-      { path: '/material/list', title: '项目物料', permissions: ['material:read'] },
+      { path: '/material/supply', title: '供应数据', permissions: ['material:read'] },
+      { path: '/material/list', title: '物料主数据', permissions: ['material:read'] },
     ],
   },
   {

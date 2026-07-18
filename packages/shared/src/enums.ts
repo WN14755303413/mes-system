@@ -230,3 +230,90 @@ export const DRAWING_STATUS_LABEL: Record<DrawingStatus, string> = {
   ACTIVE: '有效',
   VOIDED: '已作废',
 };
+
+// ============================================================
+//  物料与齐套域枚举（M6）
+// ============================================================
+
+/**
+ * 数据来源。一期 ERP 接口未开通，供应数据经导入/手工进入；
+ * 每条数据都标注来源与同步时间（业务方案 §5.1「齐套看板必须标识数据同步时间」）。
+ */
+export const SyncSource = {
+  ERP: 'ERP', // ERP 接口同步（二期）
+  IMPORT: 'IMPORT', // Excel/CSV 导入
+  MANUAL: 'MANUAL', // 手工录入
+} as const;
+export type SyncSource = (typeof SyncSource)[keyof typeof SyncSource];
+
+export const SYNC_SOURCE_LABEL: Record<SyncSource, string> = {
+  ERP: 'ERP 同步',
+  IMPORT: '导入',
+  MANUAL: '手工',
+};
+
+/** 采购订单状态（ERP 镜像，MES 不驱动流转）。 */
+export const PoStatus = {
+  OPEN: 'OPEN', // 执行中
+  CLOSED: 'CLOSED', // 已完结
+  CANCELLED: 'CANCELLED', // 已取消
+} as const;
+export type PoStatus = (typeof PoStatus)[keyof typeof PoStatus];
+
+export const PO_STATUS_LABEL: Record<PoStatus, string> = {
+  OPEN: '执行中',
+  CLOSED: '已完结',
+  CANCELLED: '已取消',
+};
+
+/** 到货记录类型。ARRIVED 计入齐套「已到货未领」；INBOUND 已入库存快照，不再重复计。 */
+export const ArrivalType = {
+  ARRIVED: 'ARRIVED', // 到货未入库
+  INBOUND: 'INBOUND', // 已入库
+} as const;
+export type ArrivalType = (typeof ArrivalType)[keyof typeof ArrivalType];
+
+export const ARRIVAL_TYPE_LABEL: Record<ArrivalType, string> = {
+  ARRIVED: '到货未入库',
+  INBOUND: '已入库',
+};
+
+/** 领料/退料。退料在齐套计算中反向抵扣已领量。 */
+export const RequisitionType = {
+  ISSUE: 'ISSUE', // 领料
+  RETURN: 'RETURN', // 退料
+} as const;
+export type RequisitionType = (typeof RequisitionType)[keyof typeof RequisitionType];
+
+export const REQUISITION_TYPE_LABEL: Record<RequisitionType, string> = {
+  ISSUE: '领料',
+  RETURN: '退料',
+};
+
+/** 领料单状态。仓库确认后才计入齐套（业务方案 §7.7「确认领料以仓库为准」）。 */
+export const RequisitionStatus = {
+  DRAFT: 'DRAFT', // 待仓库确认
+  CONFIRMED: 'CONFIRMED', // 已确认
+  CANCELLED: 'CANCELLED', // 已取消
+} as const;
+export type RequisitionStatus = (typeof RequisitionStatus)[keyof typeof RequisitionStatus];
+
+export const REQUISITION_STATUS_LABEL: Record<RequisitionStatus, string> = {
+  DRAFT: '待确认',
+  CONFIRMED: '已确认',
+  CANCELLED: '已取消',
+};
+
+/** 齐套行状态。FULFILLED 缺口≤0；IN_TRANSIT 缺口可被在途覆盖；SHORTAGE 净缺料。 */
+export const KittingRowStatus = {
+  FULFILLED: 'FULFILLED',
+  IN_TRANSIT: 'IN_TRANSIT',
+  SHORTAGE: 'SHORTAGE',
+} as const;
+export type KittingRowStatus = (typeof KittingRowStatus)[keyof typeof KittingRowStatus];
+
+export const KITTING_ROW_STATUS_LABEL: Record<KittingRowStatus, string> = {
+  FULFILLED: '已齐套',
+  IN_TRANSIT: '在途覆盖',
+  SHORTAGE: '缺料',
+};

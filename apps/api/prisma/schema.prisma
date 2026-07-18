@@ -89,6 +89,10 @@ model User {
   releasedBoms     Bom[]     @relation("BomReleaser")
   uploadedDrawings Drawing[] @relation("DrawingUploader")
 
+  // 物料与齐套域反向关系（M6）
+  requestedRequisitions Requisition[] @relation("RequisitionRequester")
+  confirmedRequisitions Requisition[] @relation("RequisitionConfirmer")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -352,6 +356,12 @@ model Project {
   boms       Bom[]
   drawings   Drawing[]
 
+  // 物料与齐套域反向关系（M6）
+  poItems      PurchaseOrderItem[] @relation("PoItemProject")
+  arrivals     Arrival[]           @relation("ArrivalProject")
+  stocks       Stock[]             @relation("StockProject")
+  requisitions Requisition[]       @relation("RequisitionProject")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -538,10 +548,10 @@ model BomItem {
 
   /// 行号，展示排序用。批量导入时自动续排，不加唯一约束以免重排受阻。
   seq          Int
-  materialCode String @map("material_code")
-  materialName String @map("material_name")
+  materialCode String  @map("material_code")
+  materialName String  @map("material_name")
   spec         String?
-  unit         String @default("件")
+  unit         String  @default("件")
   /// 需求数量。Decimal 避免 0.1+0.2 类浮点误差进入齐套计算（M6 消费本字段）。
   quantity     Decimal @default(1) @db.Decimal(12, 3)
   /// 标准件 / 非标件（业务方案 §8.2）。
@@ -557,6 +567,194 @@ model BomItem {
 
   @@index([bomId])
   @@map("bom_item")
+}
+
+// ============================================================
+//  物料与齐套域（M6）
+//
+//  一期 ERP 接口未开通（业务方案 §21 兜底策略）：采购/到货/库存数据由
+//  Excel 导入或手工维护进入，每张表带 syncSource/syncedAt 标注来源与时点，
+//  导入动作写 sys_integration_log。将来接 ERP 只换数据入口，不动齐套逻辑。
+//  齐套结果实时计算不落表；库存账务主权在 ERP，MES 只存快照不记增减账。
+// ============================================================
+
+/// 物料主数据（ERP 主数据的本地落地表）。主数据以 ERP 为准，
+/// isLongLead/leadTimeDays 是 MES 侧执行扩展字段（齐套预警用）。
+/// BomItem 仍存 materialCode 文本快照，齐套按编码关联；未建档的编码在看板上提示补录。
+model Material {
+  id   String  @id @default(cuid())
+  code String  @unique // 物料编码，对齐 ERP 规则
+  name String
+  spec String?
+  unit String  @default("件")
+
+  /// 类别：机械件/电气件/管路件 等，一期自由文本。
+  category   String?
+  isStandard Boolean @default(true) @map("is_standard")
+
+  /// 长周期物料标记与采购周期天数。缺口且无在途时高亮预警（业务方案 §8.3）。
+  isLongLead   Boolean @default(false) @map("is_long_lead")
+  leadTimeDays Int?    @map("lead_time_days")
+
+  /// 数据来源：ERP / IMPORT / MANUAL（SyncSource）。
+  syncSource String   @default("MANUAL") @map("sync_source")
+  syncedAt   DateTime @default(now()) @map("synced_at")
+
+  enabled Boolean @default(true)
+  remark  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled])
+  @@index([isLongLead])
+  @@map("mat_material")
+}
+
+/// 采购订单（ERP 镜像，MES 只读 + 备注扩展）。
+model PurchaseOrder {
+  id      String @id @default(cuid())
+  orderNo String @unique @map("order_no")
+
+  /// 供应商名快照。ERP 供应商主数据接入后改外键。
+  supplierName String?   @map("supplier_name")
+  orderDate    DateTime? @map("order_date")
+
+  /// PoStatus：OPEN 执行中 / CLOSED 已完结 / CANCELLED 已取消。
+  status String @default("OPEN")
+
+  syncSource String   @default("IMPORT") @map("sync_source")
+  syncedAt   DateTime @default(now()) @map("synced_at")
+  remark     String?
+
+  items PurchaseOrderItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("supply_purchase_order")
+}
+
+/// 采购订单明细。projectId 空 = 通用采购；riskNote 是采购员在 MES 侧
+/// 唯一可写字段（交期风险说明，业务方案 §7.6）。
+model PurchaseOrderItem {
+  id      String        @id @default(cuid())
+  orderId String        @map("order_id")
+  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  materialCode    String  @map("material_code")
+  materialName    String? @map("material_name")
+  quantity        Decimal @db.Decimal(12, 3)
+  /// 到货记录写入时累加。在途 = quantity - arrivedQuantity。
+  arrivedQuantity Decimal @default(0) @map("arrived_quantity") @db.Decimal(12, 3)
+
+  /// 预计到货日期。齐套看板据此给出「在途覆盖」行的最晚到货时间。
+  expectedDate DateTime? @map("expected_date")
+
+  /// 项目专项采购；空为通用采购。项目删除不连带删采购镜像。
+  projectId String?  @map("project_id")
+  project   Project? @relation("PoItemProject", fields: [projectId], references: [id], onDelete: SetNull)
+
+  /// 采购员维护的交期风险备注。
+  riskNote String? @map("risk_note")
+
+  arrivals Arrival[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([materialCode])
+  @@index([projectId])
+  @@map("supply_purchase_order_item")
+}
+
+/// 到货/入库记录。poItemId 可空（允许无单到货）。
+model Arrival {
+  id String @id @default(cuid())
+
+  poItemId String?            @map("po_item_id")
+  poItem   PurchaseOrderItem? @relation(fields: [poItemId], references: [id], onDelete: SetNull)
+
+  materialCode String  @map("material_code")
+  quantity     Decimal @db.Decimal(12, 3)
+
+  /// ArrivalType：ARRIVED 到货未入库（计入齐套的「已到货未领」）/ INBOUND 已入库（计入库存，不再重复计）。
+  type String @default("ARRIVED")
+
+  arrivedAt DateTime @map("arrived_at")
+
+  projectId String?  @map("project_id")
+  project   Project? @relation("ArrivalProject", fields: [projectId], references: [id], onDelete: SetNull)
+
+  syncSource String   @default("IMPORT") @map("sync_source")
+  syncedAt   DateTime @default(now()) @map("synced_at")
+  remark     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([materialCode])
+  @@index([projectId])
+  @@index([type])
+  @@map("supply_arrival")
+}
+
+/// 库存快照。projectId 空 = 通用库存。每次导入整体覆盖（账务主权在 ERP，
+/// MES 不做增减账），syncedAt 即看板上的「数据同步时间」。
+model Stock {
+  id String @id @default(cuid())
+
+  materialCode      String   @map("material_code")
+  projectId         String?  @map("project_id")
+  project           Project? @relation("StockProject", fields: [projectId], references: [id], onDelete: Cascade)
+  quantity          Decimal  @db.Decimal(12, 3)
+  availableQuantity Decimal  @map("available_quantity") @db.Decimal(12, 3)
+
+  syncSource String   @default("IMPORT") @map("sync_source")
+  syncedAt   DateTime @default(now()) @map("synced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([materialCode, projectId])
+  @@index([projectId])
+  @@map("supply_stock")
+}
+
+/// 领料/退料记录——MES 侧产生的数据（业务方案 §5.1）。
+/// 仓库确认（CONFIRMED）后才计入齐套的「已领料」。
+model Requisition {
+  id   String @id @default(cuid())
+  code String @unique // REQ-YYYYMMDD-XXX，CodeGeneratorService 生成
+
+  projectId String  @map("project_id")
+  project   Project @relation("RequisitionProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  materialCode String  @map("material_code")
+  quantity     Decimal @db.Decimal(12, 3)
+
+  /// RequisitionType：ISSUE 领料 / RETURN 退料。
+  type String @default("ISSUE")
+
+  /// RequisitionStatus：DRAFT 待确认 / CONFIRMED 已确认 / CANCELLED 已取消。
+  status String @default("DRAFT")
+
+  requestedById String?   @map("requested_by_id")
+  requestedBy   User?     @relation("RequisitionRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  confirmedById String?   @map("confirmed_by_id")
+  confirmedBy   User?     @relation("RequisitionConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  confirmedAt   DateTime? @map("confirmed_at")
+
+  remark String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([materialCode])
+  @@map("supply_requisition")
 }
 
 /// 图纸。版本号沿用设计端（业务方案 §10.2），MES 记录状态与有效性。

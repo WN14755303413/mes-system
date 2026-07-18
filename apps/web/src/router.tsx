@@ -27,6 +27,11 @@ import BomPage from '@/pages/design/bom/BomPage';
 import DrawingPage from '@/pages/design/drawing/DrawingPage';
 import EcoPage from '@/pages/design/change/EcoPage';
 
+// M6 物料齐套：物料主数据 / 供应数据 / 齐套看板
+import MaterialPage from '@/pages/material/list/MaterialPage';
+import SupplyPage from '@/pages/material/supply/SupplyPage';
+import KittingPage from '@/pages/material/kitting/KittingPage';
+
 /** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
 const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/user': <UserListPage />,
@@ -40,6 +45,9 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/design/bom': <BomPage />,
   '/design/drawing': <DrawingPage />,
   '/design/change': <EcoPage />,
+  '/material/list': <MaterialPage />,
+  '/material/supply': <SupplyPage />,
+  '/material/kitting': <KittingPage />,
 };
 
 function FullscreenSpin() {
