@@ -25,12 +25,28 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         algorithm: theme.defaultAlgorithm,
         token: {
           colorPrimary: '#1f5497',
-          borderRadius: 6,
+          borderRadius: 8,
           fontSize: 14,
+          colorBgLayout: 'transparent',
         },
         components: {
           // 登录卡片是半透明玻璃，输入框须为纯白才有足够对比度
           Input: { colorBgContainer: '#ffffff' },
+          Menu: {
+            itemBorderRadius: 10,
+            itemMarginInline: 10,
+            itemHeight: 42,
+            itemSelectedBg: '#1f5497',
+            itemSelectedColor: '#ffffff',
+            itemColor: '#475569',
+            itemHoverBg: '#eef4fb',
+            itemHoverColor: '#1f5497',
+            subMenuItemBg: 'transparent',
+            iconSize: 16,
+            fontSize: 14,
+          },
+          Breadcrumb: { fontSize: 13 },
+          Card: { borderRadiusLG: 16 },
         },
       }}
     >

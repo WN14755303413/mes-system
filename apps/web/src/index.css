@@ -26,3 +26,37 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* 纤细、低调的滚动条：主框架内容区与侧边菜单大量滚动，默认滚动条太重 */
+.mes-sider-menu,
+main {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.mes-sider-menu::-webkit-scrollbar,
+main::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.mes-sider-menu::-webkit-scrollbar-thumb,
+main::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.mes-sider-menu::-webkit-scrollbar-thumb:hover,
+main::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.mes-sider-menu::-webkit-scrollbar-track,
+main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 选中的一级/子菜单：工业蓝底 + 柔和投影，图标与文字转白 */
+.mes-sider-menu .ant-menu-item-selected {
+  box-shadow: 0 6px 16px -6px rgba(31, 84, 151, 0.5);
+}
+/* 收起态下父级菜单选中时给个浅底，避免只有子项高亮、父图标毫无反馈 */
+.mes-sider-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #1f5497;
+}
