@@ -91,3 +91,81 @@ export const DataScope = {
   SELF_ONLY: 'SELF_ONLY', // 仅本人的数据（如装配工只看自己的任务）
 } as const;
 export type DataScope = (typeof DataScope)[keyof typeof DataScope];
+
+// ============================================================
+//  项目域枚举（M4）
+// ============================================================
+
+/** 风险等级。既用于项目整体 riskLevel，也用于单条风险 level。 */
+export const RiskLevel = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL',
+} as const;
+export type RiskLevel = (typeof RiskLevel)[keyof typeof RiskLevel];
+
+export const RISK_LEVEL_LABEL: Record<RiskLevel, string> = {
+  LOW: '低',
+  MEDIUM: '中',
+  HIGH: '高',
+  CRITICAL: '严重',
+};
+
+/** 风险状态。 */
+export const RiskStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+export type RiskStatus = (typeof RiskStatus)[keyof typeof RiskStatus];
+
+export const RISK_STATUS_LABEL: Record<RiskStatus, string> = {
+  OPEN: '未关闭',
+  CLOSED: '已关闭',
+};
+
+/** 项目问题状态（项目层面的协调问题，区别于质量问题单）。 */
+export const IssueStatus = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+  CLOSED: 'CLOSED',
+} as const;
+export type IssueStatus = (typeof IssueStatus)[keyof typeof IssueStatus];
+
+export const ISSUE_STATUS_LABEL: Record<IssueStatus, string> = {
+  OPEN: '待处理',
+  IN_PROGRESS: '处理中',
+  RESOLVED: '已解决',
+  CLOSED: '已关闭',
+};
+
+/** 问题优先级。 */
+export const IssuePriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+} as const;
+export type IssuePriority = (typeof IssuePriority)[keyof typeof IssuePriority];
+
+export const ISSUE_PRIORITY_LABEL: Record<IssuePriority, string> = {
+  LOW: '低',
+  MEDIUM: '中',
+  HIGH: '高',
+};
+
+/**
+ * WBS 任务状态。RecordStatus 的实用子集——甘特图上只区分未开始 / 进行中 / 已完成。
+ */
+export const TaskStatus = {
+  DRAFT: 'DRAFT',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+} as const;
+export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
+
+export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
+  DRAFT: '未开始',
+  IN_PROGRESS: '进行中',
+  COMPLETED: '已完成',
+};

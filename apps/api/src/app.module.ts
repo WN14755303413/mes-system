@@ -6,9 +6,12 @@ import { CsrfGuard } from './common/guards/csrf.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { CodeModule } from './common/code/code.module';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { StateModule } from './common/state/state.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { ProjectModule } from './modules/project/project.module';
 import { SystemModule } from './modules/system/system.module';
 import { validateEnv } from './config/env';
 
@@ -23,9 +26,12 @@ import { validateEnv } from './config/env';
     // 全局兜底限流；登录、验证码等接口在 controller 上另有更严格的 @Throttle
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
+    CodeModule,
+    StateModule,
     AuthModule,
     HealthModule,
     SystemModule,
+    ProjectModule,
   ],
   providers: [
     // 顺序即执行顺序，逐层收窄：

@@ -17,6 +17,11 @@ import DeptPage from '@/pages/system/dept/DeptPage';
 import AuditLogPage from '@/pages/system/audit/AuditLogPage';
 import IntegrationLogPage from '@/pages/system/integration/IntegrationLogPage';
 
+// M4 项目管理：台账 / 甘特图 / 风险与问题
+import ProjectListPage from '@/pages/project/list/ProjectListPage';
+import ProjectGanttPage from '@/pages/project/gantt/ProjectGanttPage';
+import ProjectRiskPage from '@/pages/project/risk/ProjectRiskPage';
+
 /** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
 const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/user': <UserListPage />,
@@ -24,6 +29,9 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/dept': <DeptPage />,
   '/system/audit': <AuditLogPage />,
   '/system/integration': <IntegrationLogPage />,
+  '/project/list': <ProjectListPage />,
+  '/project/gantt': <ProjectGanttPage />,
+  '/project/risk': <ProjectRiskPage />,
 };
 
 function FullscreenSpin() {

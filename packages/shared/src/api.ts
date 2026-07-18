@@ -1,4 +1,11 @@
 import type { DataScope, UserStatus } from './enums';
+import type {
+  IssuePriority,
+  IssueStatus,
+  RiskLevel,
+  RiskStatus,
+  TaskStatus,
+} from './enums';
 import type { Permission } from './permissions';
 
 /** 统一响应包裹。后端 TransformInterceptor 自动套上。 */
@@ -294,6 +301,172 @@ export interface IntegrationLogQuery extends PageQuery {
   interfaceName?: string;
   success?: boolean;
   needsAttention?: boolean;
+}
+
+// ============================================================
+//  M4 项目管理：台账 / 里程碑 / WBS / 风险 / 问题 / 成员
+//
+//  前后端契约。后端 controller 返回值、DTO 与前端 api/project.ts 共用，
+//  避免字段漂移。日期统一用 ISO 字符串在网络上传输。
+// ============================================================
+
+/** 项目台账列表行。 */
+export interface ProjectListItem {
+  id: string;
+  code: string;
+  name: string;
+  customerName: string | null;
+  contractNo: string | null;
+  projectType: string | null;
+  status: string; // RecordStatus
+  riskLevel: RiskLevel;
+  equipmentCount: number;
+  managerId: string | null;
+  managerName: string | null;
+  planStartAt: string | null;
+  planEndAt: string | null;
+  actualEndAt: string | null;
+  /** 未关闭风险数与未关闭问题数，列表页红点提示用。 */
+  openRiskCount: number;
+  openIssueCount: number;
+  createdAt: string;
+}
+
+export interface ProjectListQuery extends PageQuery {
+  status?: string;
+  riskLevel?: RiskLevel;
+  managerId?: string;
+}
+
+/** 项目详情：列表行 + 描述 + 里程碑 + 成员。 */
+export interface ProjectDetail extends ProjectListItem {
+  description: string | null;
+  milestones: MilestoneItem[];
+  members: ProjectMemberItem[];
+}
+
+export interface SaveProjectRequest {
+  name: string;
+  customerName?: string | null;
+  contractNo?: string | null;
+  projectType?: string | null;
+  equipmentCount?: number;
+  managerId?: string | null;
+  planStartAt?: string | null;
+  planEndAt?: string | null;
+  riskLevel?: RiskLevel;
+  description?: string | null;
+}
+
+/** 变更项目状态（走通用状态机，后端校验合法跃迁）。 */
+export interface ChangeProjectStatusRequest {
+  status: string; // 目标 RecordStatus
+}
+
+// ---- 里程碑 ----
+
+export interface MilestoneItem {
+  id: string;
+  projectId: string;
+  name: string;
+  planDate: string | null;
+  actualDate: string | null;
+  sort: number;
+}
+
+export interface SaveMilestoneRequest {
+  name: string;
+  planDate?: string | null;
+  actualDate?: string | null;
+  sort?: number;
+}
+
+// ---- WBS 任务（甘特图数据源）----
+
+/** WBS 任务节点。后端返回扁平数组（含 parentId），前端按需建树或直接喂甘特图。 */
+export interface TaskItem {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  name: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  planStartAt: string | null;
+  planEndAt: string | null;
+  progress: number;
+  status: TaskStatus;
+  sort: number;
+}
+
+export interface SaveTaskRequest {
+  name: string;
+  parentId?: string | null;
+  ownerId?: string | null;
+  planStartAt?: string | null;
+  planEndAt?: string | null;
+  progress?: number;
+  status?: TaskStatus;
+  sort?: number;
+}
+
+// ---- 风险 ----
+
+export interface RiskItem {
+  id: string;
+  projectId: string;
+  title: string;
+  level: RiskLevel;
+  mitigation: string | null;
+  status: RiskStatus;
+  ownerId: string | null;
+  ownerName: string | null;
+  createdAt: string;
+}
+
+export interface SaveRiskRequest {
+  title: string;
+  level: RiskLevel;
+  mitigation?: string | null;
+  status?: RiskStatus;
+  ownerId?: string | null;
+}
+
+// ---- 问题 ----
+
+export interface IssueItem {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  status: IssueStatus;
+  priority: IssuePriority;
+  ownerId: string | null;
+  ownerName: string | null;
+  dueDate: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+export interface SaveIssueRequest {
+  title: string;
+  description?: string | null;
+  status?: IssueStatus;
+  priority?: IssuePriority;
+  ownerId?: string | null;
+  dueDate?: string | null;
+}
+
+// ---- 成员 ----
+
+export interface ProjectMemberItem {
+  userId: string;
+  displayName: string;
+  roleInProject: string | null;
+}
+
+export interface SaveMemberRequest {
+  userId: string;
+  roleInProject?: string | null;
 }
 
 /**

@@ -77,6 +77,13 @@ model User {
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
 
+  // 项目域反向关系（M4）
+  managedProjects Project[]       @relation("ProjectManager")
+  ownedTasks      ProjectTask[]   @relation("TaskOwner")
+  ownedRisks      ProjectRisk[]   @relation("RiskOwner")
+  ownedIssues     ProjectIssue[]  @relation("IssueOwner")
+  projectMembers  ProjectMember[] @relation("ProjectMembership")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -111,9 +118,9 @@ model Role {
 }
 
 model Permission {
-  id     String  @id @default(cuid())
+  id     String           @id @default(cuid())
   /// 形如 `project:create`，与 packages/shared/src/permissions.ts 保持一致
-  code   String  @unique
+  code   String           @unique
   name   String
   module String
   roles  RolePermission[]
@@ -151,15 +158,15 @@ model RolePermission {
 /// Refresh token 只存哈希值。即使数据库泄露，也无法还原出可用的 token。
 /// 采用轮换（rotation）策略：每次刷新签发新 token 并作废旧的。
 model RefreshToken {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  tokenHash String   @unique @map("token_hash")
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
   /// 同一登录会话的所有 token 共享一个 family id。
   /// 检测到已撤销 token 被复用 → 判定为窃取 → 吊销整个 family。
-  familyId  String   @map("family_id")
-  expiresAt DateTime @map("expires_at")
+  familyId  String    @map("family_id")
+  expiresAt DateTime  @map("expires_at")
   revokedAt DateTime? @map("revoked_at")
-  userAgent String?  @map("user_agent")
+  userAgent String?   @map("user_agent")
   ip        String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -194,9 +201,9 @@ model PasswordResetRequest {
   userAgent String? @map("user_agent")
 
   /// 处理人（管理员）的用户 id 与处理备注
-  handledBy   String?   @map("handled_by")
-  handledAt   DateTime? @map("handled_at")
-  handleNote  String?   @map("handle_note")
+  handledBy  String?   @map("handled_by")
+  handledAt  DateTime? @map("handled_at")
+  handleNote String?   @map("handle_note")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -207,11 +214,11 @@ model PasswordResetRequest {
 
 /// 登录尝试记录。用于 IP 维度与账号维度的双重限流。
 model LoginAttempt {
-  id       String   @id @default(cuid())
-  username String
-  ip       String
-  success  Boolean
-  reason   String?
+  id        String  @id @default(cuid())
+  username  String
+  ip        String
+  success   Boolean
+  reason    String?
   userAgent String? @map("user_agent")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -252,19 +259,19 @@ model AuditLog {
 
 /// 接口日志（建设方案 §11.3）。失败的记录构成「异常池」，支持重试与人工补偿。
 model IntegrationLog {
-  id           String    @id @default(cuid())
-  interfaceName String   @map("interface_name")
-  sourceSystem String    @map("source_system") // ERP / DINGTALK / ANT / MES
-  targetSystem String    @map("target_system")
-  requestSummary Json?   @map("request_summary")
-  responseSummary Json?  @map("response_summary")
-  success      Boolean
-  errorMsg     String?   @map("error_msg")
-  retryCount   Int       @default(0) @map("retry_count")
+  id              String    @id @default(cuid())
+  interfaceName   String    @map("interface_name")
+  sourceSystem    String    @map("source_system") // ERP / DINGTALK / ANT / MES
+  targetSystem    String    @map("target_system")
+  requestSummary  Json?     @map("request_summary")
+  responseSummary Json?     @map("response_summary")
+  success         Boolean
+  errorMsg        String?   @map("error_msg")
+  retryCount      Int       @default(0) @map("retry_count")
   /// 待人工补偿的记录标记为 true
-  needsAttention Boolean @default(false) @map("needs_attention")
-  resolvedAt   DateTime? @map("resolved_at")
-  triggeredBy  String?   @map("triggered_by") // 操作人 id 或 "SCHEDULER"
+  needsAttention  Boolean   @default(false) @map("needs_attention")
+  resolvedAt      DateTime? @map("resolved_at")
+  triggeredBy     String?   @map("triggered_by") // 操作人 id 或 "SCHEDULER"
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -287,4 +294,187 @@ model CodeSequence {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("sys_code_sequence")
+}
+
+// ============================================================
+//  项目域（M4）
+//
+//  项目是整个 MES 的主线对象，后续里程碑的 BOM、齐套、工单、质量、
+//  调试都挂到 project 上。客户/合同/物料属于 ERP 同步的主数据（后续里程碑
+//  才建表），本阶段项目上先以文本字段保存客户名与合同号快照，待主数据域
+//  就绪后再补外键关联。
+// ============================================================
+
+/// 项目台账。编号形如 PJ-2026-ABC-001，由 CodeGeneratorService 生成。
+/// status 走通用状态机（RecordStatus）：草稿→已发布→执行中→…→已关闭。
+model Project {
+  id   String @id @default(cuid())
+  code String @unique // PJ-2026-ABC-001
+  name String
+
+  /// 客户名快照。ERP 客户主数据接入后改为 customerId 外键。
+  customerName String? @map("customer_name")
+  /// 合同/销售订单号快照。同上，ERP 合同域就绪后关联。
+  contractNo   String? @map("contract_no")
+
+  /// 项目类型：单片湿法 / 槽式 / 电镀化镀 / 定制 等，一期自由文本。
+  projectType String? @map("project_type")
+
+  /// 通用状态机状态（RecordStatus）。默认草稿。
+  status String @default("DRAFT")
+
+  /// 风险等级：LOW / MEDIUM / HIGH / CRITICAL。由项目风险汇总或人工设定。
+  riskLevel String @default("LOW") @map("risk_level")
+
+  /// 设备数量。一个项目可对应一台或多台设备（建设方案 §4.1）。
+  equipmentCount Int @default(1) @map("equipment_count")
+
+  /// 项目经理（sys_user）。离职置空而非级联删项目。
+  managerId String? @map("manager_id")
+  manager   User?   @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  planStartAt DateTime? @map("plan_start_at")
+  planEndAt   DateTime? @map("plan_end_at") // 计划交期
+  actualEndAt DateTime? @map("actual_end_at") // 实际交期
+
+  description String?
+
+  milestones ProjectMilestone[]
+  tasks      ProjectTask[]
+  risks      ProjectRisk[]
+  issues     ProjectIssue[]
+  members    ProjectMember[]
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([status])
+  @@index([managerId])
+  @@map("project")
+}
+
+/// 项目里程碑（关键节点）。用于台账详情的时间轴与延期判定。
+model ProjectMilestone {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name       String
+  planDate   DateTime? @map("plan_date")
+  /// 实际达成日期；非空即视为已完成。
+  actualDate DateTime? @map("actual_date")
+  sort       Int       @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("project_milestone")
+}
+
+/// WBS 任务。自引用树，是甘特图的数据源。
+/// path 存祖先链（如 /rootTaskId/parentId/），与 Dept 同构，便于取整棵子树。
+model ProjectTask {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  parentId String?       @map("parent_id")
+  parent   ProjectTask?  @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children ProjectTask[] @relation("TaskTree")
+  path     String        @default("/")
+
+  name    String
+  /// 任务负责人（sys_user）。
+  ownerId String? @map("owner_id")
+  owner   User?   @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  planStartAt DateTime? @map("plan_start_at")
+  planEndAt   DateTime? @map("plan_end_at")
+
+  /// 完成百分比 0-100，甘特图进度条用。
+  progress Int    @default(0)
+  /// 任务状态（RecordStatus 子集，一期用 DRAFT/IN_PROGRESS/COMPLETED）。
+  status   String @default("DRAFT")
+
+  sort Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@index([parentId])
+  @@index([path])
+  @@map("project_task")
+}
+
+/// 项目风险登记（建设方案 §8.1）。
+model ProjectRisk {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title      String
+  /// 风险等级：LOW / MEDIUM / HIGH / CRITICAL。
+  level      String  @default("MEDIUM")
+  /// 应对措施。
+  mitigation String?
+  /// OPEN / CLOSED。关闭即视为已消除或已转化为问题。
+  status     String  @default("OPEN")
+
+  ownerId String? @map("owner_id")
+  owner   User?   @relation("RiskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@index([status])
+  @@map("project_risk")
+}
+
+/// 项目问题闭环（建设方案 §8.1）。区别于质量问题单（M7），这是项目层面的协调问题。
+model ProjectIssue {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  /// OPEN / IN_PROGRESS / RESOLVED / CLOSED。
+  status      String  @default("OPEN")
+  /// 优先级：LOW / MEDIUM / HIGH。
+  priority    String  @default("MEDIUM")
+
+  ownerId String? @map("owner_id")
+  owner   User?   @relation("IssueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  dueDate    DateTime? @map("due_date")
+  resolvedAt DateTime? @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@index([status])
+  @@map("project_issue")
+}
+
+/// 项目成员及其项目内角色。用于 OWNED_PROJECT 数据范围判定与协同人展示。
+model ProjectMember {
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id")
+  user   User   @relation("ProjectMembership", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 项目内角色描述（如 机械设计 / 电气调试），自由文本，与全局 RBAC 角色无关。
+  roleInProject String? @map("role_in_project")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_member")
 }
