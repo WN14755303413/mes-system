@@ -1,13 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { SystemModule } from './modules/system/system.module';
 import { validateEnv } from './config/env';
 
 @Module({
@@ -23,6 +25,7 @@ import { validateEnv } from './config/env';
     PrismaModule,
     AuthModule,
     HealthModule,
+    SystemModule,
   ],
   providers: [
     // 顺序即执行顺序，逐层收窄：
@@ -31,6 +34,8 @@ import { validateEnv } from './config/env';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    // 审计：只对 @Audit() 标注的写操作生效，成功失败都留痕
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule {}

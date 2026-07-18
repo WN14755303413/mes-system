@@ -120,6 +120,182 @@ export interface PasswordStrength {
   issues: string[];
 }
 
+// ============================================================
+//  M3 系统管理：用户 / 角色 / 部门 / 审计 / 接口日志
+//
+//  这些类型是前后端的契约：后端 controller 的返回值与 DTO、前端 api/system.ts
+//  的 hooks 都引用它们，避免各写一份导致字段漂移。
+// ============================================================
+
+// ---- 用户 ----
+
+/** 用户列表行。不含 passwordHash 等敏感字段——它们永远不出后端。 */
+export interface SysUserListItem {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string | null;
+  phone: string | null;
+  status: UserStatus;
+  deptId: string | null;
+  deptName: string | null;
+  roles: { code: string; name: string }[];
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface SysUserListQuery extends PageQuery {
+  deptId?: string;
+  status?: UserStatus;
+}
+
+export interface CreateUserRequest {
+  username: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  deptId?: string;
+  roleIds: string[];
+}
+
+export interface UpdateUserRequest {
+  displayName?: string;
+  email?: string | null;
+  phone?: string | null;
+  deptId?: string | null;
+}
+
+/**
+ * 新建用户 / 重置密码后一次性返回的临时密码。
+ * 系统生成随机强密码，明文只在这一次响应里出现，之后无法再取回。
+ * 用户首次登录被强制改密（mustChangePassword）。
+ */
+export interface TempPasswordResponse {
+  username: string;
+  tempPassword: string;
+}
+
+export interface AssignRolesRequest {
+  roleIds: string[];
+}
+
+export interface UpdateUserStatusRequest {
+  /** 仅允许在 ACTIVE / DISABLED 间切换；LOCKED 由登录失败自动产生，不在此设置。 */
+  status: Extract<UserStatus, 'ACTIVE' | 'DISABLED'>;
+}
+
+// ---- 角色与权限 ----
+
+export interface RoleListItem {
+  id: string;
+  code: string;
+  name: string;
+  remark: string | null;
+  dataScope: DataScope;
+  builtin: boolean;
+  enabled: boolean;
+  userCount: number;
+  permissionCount: number;
+}
+
+export interface RoleDetail extends RoleListItem {
+  permissions: Permission[];
+}
+
+export interface CreateRoleRequest {
+  code: string;
+  name: string;
+  remark?: string;
+  dataScope: DataScope;
+}
+
+export interface UpdateRoleRequest {
+  name?: string;
+  remark?: string | null;
+  dataScope?: DataScope;
+  enabled?: boolean;
+}
+
+export interface UpdateRolePermissionsRequest {
+  permissions: Permission[];
+}
+
+/** 权限点，供前端权限树按 module 分组渲染。 */
+export interface PermissionItem {
+  code: Permission;
+  name: string;
+  module: string;
+}
+
+// ---- 部门 ----
+
+/** 部门树节点。后端返回扁平数组，前端按 parentId 建树；或后端直接返回嵌套 children。 */
+export interface DeptNode {
+  id: string;
+  name: string;
+  code: string;
+  parentId: string | null;
+  sort: number;
+  enabled: boolean;
+  userCount: number;
+  children: DeptNode[];
+}
+
+export interface SaveDeptRequest {
+  name: string;
+  code: string;
+  parentId?: string | null;
+  sort?: number;
+  enabled?: boolean;
+}
+
+// ---- 审计日志 ----
+
+export interface AuditLogItem {
+  id: string;
+  userId: string | null;
+  username: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  changes: unknown;
+  ip: string | null;
+  userAgent: string | null;
+  success: boolean;
+  errorMsg: string | null;
+  createdAt: string;
+}
+
+export interface AuditLogQuery extends PageQuery {
+  username?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+}
+
+// ---- 接口日志（M3 只读展示，重试补偿留 M11） ----
+
+export interface IntegrationLogItem {
+  id: string;
+  interfaceName: string;
+  sourceSystem: string;
+  targetSystem: string;
+  success: boolean;
+  errorMsg: string | null;
+  retryCount: number;
+  needsAttention: boolean;
+  resolvedAt: string | null;
+  triggeredBy: string | null;
+  createdAt: string;
+}
+
+export interface IntegrationLogQuery extends PageQuery {
+  interfaceName?: string;
+  success?: boolean;
+  needsAttention?: boolean;
+}
+
 /**
  * 评估密码强度。前端用它渲染强度条，后端用它做准入校验（score < 2 拒绝）。
  * 注意：这只挡住弱密码，真正的防护来自 Argon2id 哈希与登录限流。

@@ -10,6 +10,22 @@ import DashboardPage from '@/pages/dashboard/DashboardPage';
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage';
 import ProfilePage from '@/pages/profile/ProfilePage';
 
+// M3 系统管理：五个真实页面，其余业务路径仍走占位页
+import UserListPage from '@/pages/system/user/UserListPage';
+import RolePage from '@/pages/system/role/RolePage';
+import DeptPage from '@/pages/system/dept/DeptPage';
+import AuditLogPage from '@/pages/system/audit/AuditLogPage';
+import IntegrationLogPage from '@/pages/system/integration/IntegrationLogPage';
+
+/** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
+const REAL_PAGES: Record<string, React.ReactNode> = {
+  '/system/user': <UserListPage />,
+  '/system/role': <RolePage />,
+  '/system/dept': <DeptPage />,
+  '/system/audit': <AuditLogPage />,
+  '/system/integration': <IntegrationLogPage />,
+};
+
 function FullscreenSpin() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -80,9 +96,9 @@ export function AppRoutes() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        {/* 业务模块：M2 用占位页，后续里程碑逐一替换成真实页面 */}
+        {/* 业务模块：已实现的走真实页面，其余先用占位页，后续里程碑逐一替换 */}
         {leafPaths.map((path) => (
-          <Route key={path} path={path} element={<PlaceholderPage />} />
+          <Route key={path} path={path} element={REAL_PAGES[path] ?? <PlaceholderPage />} />
         ))}
       </Route>
 
