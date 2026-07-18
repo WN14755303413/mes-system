@@ -84,6 +84,11 @@ model User {
   ownedIssues     ProjectIssue[]  @relation("IssueOwner")
   projectMembers  ProjectMember[] @relation("ProjectMembership")
 
+  // BOM 与图纸域反向关系（M5）
+  createdBoms      Bom[]     @relation("BomCreator")
+  releasedBoms     Bom[]     @relation("BomReleaser")
+  uploadedDrawings Drawing[] @relation("DrawingUploader")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -344,6 +349,8 @@ model Project {
   risks      ProjectRisk[]
   issues     ProjectIssue[]
   members    ProjectMember[]
+  boms       Bom[]
+  drawings   Drawing[]
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -477,4 +484,113 @@ model ProjectMember {
   @@id([projectId, userId])
   @@index([userId])
   @@map("project_member")
+}
+
+// ============================================================
+//  BOM 与图纸域（M5）
+//
+//  BOM 一行一个版本，走独立的 BomStatus 状态机（草稿→已发布→冻结/变更中→作废），
+//  与通用 RecordStatus 分离——BOM 有「冻结」语义而无执行过程语义。
+//  ECO 采用轻量版本链：新版本从 sourceBomId 派生并记录变更原因，
+//  新版发布时旧版自动作废，防止现场误用旧版（业务方案 §8.2）。
+// ============================================================
+
+/// 项目 BOM 版本。version 形如 V1.0（编码规则 §10.2），同项目内唯一。
+model Bom {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  version String
+  /// BomStatus。现场（无 bom:write）只能看到 RELEASED / FROZEN。
+  status  String  @default("DRAFT")
+  remark  String?
+
+  /// ECO 变更原因。从旧版本派生时必填（业务方案 §8.2「变更必须记录原因」）。
+  changeReason String? @map("change_reason")
+  /// 派生自哪个版本。初始版本为 null。删除旧版不级联新版，置空保历史。
+  sourceBomId  String? @map("source_bom_id")
+  source       Bom?    @relation("BomEcoChain", fields: [sourceBomId], references: [id], onDelete: SetNull)
+  derived      Bom[]   @relation("BomEcoChain")
+
+  releasedAt   DateTime? @map("released_at")
+  releasedById String?   @map("released_by_id")
+  releasedBy   User?     @relation("BomReleaser", fields: [releasedById], references: [id], onDelete: SetNull)
+
+  createdById String? @map("created_by_id")
+  createdBy   User?   @relation("BomCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  items BomItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([projectId, version])
+  @@index([projectId, status])
+  @@map("bom")
+}
+
+/// BOM 明细行。仅草稿状态可编辑；发布后随版本一起只读。
+model BomItem {
+  id    String @id @default(cuid())
+  bomId String @map("bom_id")
+  bom   Bom    @relation(fields: [bomId], references: [id], onDelete: Cascade)
+
+  /// 行号，展示排序用。批量导入时自动续排，不加唯一约束以免重排受阻。
+  seq          Int
+  materialCode String @map("material_code")
+  materialName String @map("material_name")
+  spec         String?
+  unit         String @default("件")
+  /// 需求数量。Decimal 避免 0.1+0.2 类浮点误差进入齐套计算（M6 消费本字段）。
+  quantity     Decimal @default(1) @db.Decimal(12, 3)
+  /// 标准件 / 非标件（业务方案 §8.2）。
+  isStandard   Boolean @default(true) @map("is_standard")
+  remark       String?
+
+  /// 关联图纸（可选）。图纸删除不连带删明细。
+  drawingId String?  @map("drawing_id")
+  drawing   Drawing? @relation(fields: [drawingId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([bomId])
+  @@map("bom_item")
+}
+
+/// 图纸。版本号沿用设计端（业务方案 §10.2），MES 记录状态与有效性。
+/// 文件本体在对象存储（storageKey），下载/预览必须经后端鉴权并留审计。
+model Drawing {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// 图号。同项目同图号上传新版本时，旧版自动置为 VOIDED。
+  code    String
+  name    String
+  version String
+  /// DrawingStatus：ACTIVE 有效 / VOIDED 已作废。现场（无 drawing:write）只见 ACTIVE。
+  status  String @default("ACTIVE")
+
+  /// 对象存储 key，驱动无关：local 驱动是根目录内相对路径，supabase 驱动是 bucket 内路径。
+  storageKey String @map("storage_key")
+  fileName   String @map("file_name")
+  fileSize   Int    @map("file_size")
+  mimeType   String @map("mime_type")
+
+  uploadedById String? @map("uploaded_by_id")
+  uploadedBy   User?   @relation("DrawingUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  voidedAt DateTime? @map("voided_at")
+  remark   String?
+
+  bomItems BomItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([projectId, code, version])
+  @@index([projectId, status])
+  @@map("drawing")
 }

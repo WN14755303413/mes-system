@@ -37,6 +37,7 @@
     "@nestjs/schematics": "^11.0.2",
     "@types/cookie-parser": "^1.4.8",
     "@types/express": "^5.0.1",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.13.14",
     "prisma": "^6.5.0",
     "tsx": "^4.19.3",

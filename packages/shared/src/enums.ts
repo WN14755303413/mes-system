@@ -169,3 +169,64 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   IN_PROGRESS: '进行中',
   COMPLETED: '已完成',
 };
+
+// ============================================================
+//  BOM 与图纸域枚举（M5）
+// ============================================================
+
+/**
+ * BOM 版本状态（业务方案 §8.2）。
+ *
+ * 独立于通用 RecordStatus——BOM 的生命周期有「冻结」（锁定用于生产，变更须走 ECO），
+ * 而没有执行中/暂停等过程语义，硬塞进通用状态机会污染其它模块。
+ * 流转：草稿 → 已发布 → (冻结 | 变更中) → 已作废。
+ */
+export const BomStatus = {
+  DRAFT: 'DRAFT', // 草稿：设计维护中，现场不可见
+  RELEASED: 'RELEASED', // 已发布：现场可见的有效版本
+  FROZEN: 'FROZEN', // 已冻结：锁定用于生产，变更必须走 ECO
+  CHANGING: 'CHANGING', // 变更中：已有派生的新版本草稿在途
+  VOIDED: 'VOIDED', // 已作废：被新版本取代或人工废弃
+} as const;
+export type BomStatus = (typeof BomStatus)[keyof typeof BomStatus];
+
+export const BOM_STATUS_LABEL: Record<BomStatus, string> = {
+  DRAFT: '草稿',
+  RELEASED: '已发布',
+  FROZEN: '已冻结',
+  CHANGING: '变更中',
+  VOIDED: '已作废',
+};
+
+/** BOM 允许的状态跃迁。后端强校验，前端据此渲染操作按钮。 */
+export const BOM_STATUS_TRANSITIONS: Record<BomStatus, BomStatus[]> = {
+  DRAFT: ['RELEASED', 'VOIDED'],
+  RELEASED: ['FROZEN', 'CHANGING', 'VOIDED'],
+  FROZEN: ['CHANGING', 'VOIDED'],
+  CHANGING: ['RELEASED', 'VOIDED'], // 变更完成重新发布，或整版作废
+  VOIDED: [],
+};
+
+/**
+ * 现场（无 bom:write 权限者）可见的 BOM 状态（业务方案 §8.2
+ * 「现场装配只能查看已发布或冻结版本」）。列表与详情接口据此过滤。
+ */
+export const BOM_SHOP_VISIBLE_STATUSES: readonly BomStatus[] = [
+  BomStatus.RELEASED,
+  BomStatus.FROZEN,
+];
+
+/**
+ * 图纸状态。版本号沿用设计端，MES 只记录有效性（业务方案 §10.2）——
+ * 同图号上传新版本时旧版自动作废，「旧图纸必须标识作废，避免误用」。
+ */
+export const DrawingStatus = {
+  ACTIVE: 'ACTIVE', // 有效
+  VOIDED: 'VOIDED', // 已作废
+} as const;
+export type DrawingStatus = (typeof DrawingStatus)[keyof typeof DrawingStatus];
+
+export const DRAWING_STATUS_LABEL: Record<DrawingStatus, string> = {
+  ACTIVE: '有效',
+  VOIDED: '已作废',
+};

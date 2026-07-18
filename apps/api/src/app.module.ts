@@ -9,7 +9,9 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { CodeModule } from './common/code/code.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { StateModule } from './common/state/state.module';
+import { StorageModule } from './common/storage/storage.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BomModule } from './modules/bom/bom.module';
 import { HealthModule } from './modules/health/health.module';
 import { ProjectModule } from './modules/project/project.module';
 import { SystemModule } from './modules/system/system.module';
@@ -28,10 +30,12 @@ import { validateEnv } from './config/env';
     PrismaModule,
     CodeModule,
     StateModule,
+    StorageModule,
     AuthModule,
     HealthModule,
     SystemModule,
     ProjectModule,
+    BomModule,
   ],
   providers: [
     // 顺序即执行顺序，逐层收窄：

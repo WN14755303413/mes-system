@@ -96,16 +96,29 @@ http.interceptors.response.use(
   (res) => res.data?.data ?? res.data,
   async (err: AxiosError<ErrorBody>) => {
     const status = err.response?.status ?? 0;
-    const body = err.response?.data;
+    let body = err.response?.data;
+    // responseType: 'blob' 的请求（如图纸下载）出错时，错误 JSON 也被包成了 Blob，
+    // 不还原就读不到 errorCode，过期会被误判成会话失效而不是走静默刷新。
+    if (body instanceof Blob && body.type.includes('json')) {
+      try {
+        body = JSON.parse(await body.text()) as ErrorBody;
+      } catch {
+        body = undefined;
+      }
+    }
     const config = err.config as RetriableConfig | undefined;
     const url = config?.url ?? '';
 
     // refresh / login 自身返回 401 时不能再触发刷新，否则会无限递归
     const isAuthEndpoint = url.includes('/auth/refresh') || url.includes('/auth/login');
 
+    // TOKEN_EXPIRED：token 过期但 cookie 还在。
+    // UNAUTHENTICATED：access cookie 的 maxAge 与 token 有效期一致，过期后浏览器
+    // 根本不带 cookie，后端只能报「未登录」——此时 refresh cookie 往往仍有效，
+    // 同样应静默续期一次而不是直接踢回登录页。
     if (
       status === 401 &&
-      body?.errorCode === 'TOKEN_EXPIRED' &&
+      (body?.errorCode === 'TOKEN_EXPIRED' || body?.errorCode === 'UNAUTHENTICATED') &&
       config &&
       !config._retried &&
       !isAuthEndpoint

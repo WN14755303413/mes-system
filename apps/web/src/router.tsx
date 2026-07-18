@@ -22,6 +22,11 @@ import ProjectListPage from '@/pages/project/list/ProjectListPage';
 import ProjectGanttPage from '@/pages/project/gantt/ProjectGanttPage';
 import ProjectRiskPage from '@/pages/project/risk/ProjectRiskPage';
 
+// M5 BOM 与图纸：版本管理 / 图纸 / 设计变更
+import BomPage from '@/pages/design/bom/BomPage';
+import DrawingPage from '@/pages/design/drawing/DrawingPage';
+import EcoPage from '@/pages/design/change/EcoPage';
+
 /** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
 const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/user': <UserListPage />,
@@ -32,6 +37,9 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/project/list': <ProjectListPage />,
   '/project/gantt': <ProjectGanttPage />,
   '/project/risk': <ProjectRiskPage />,
+  '/design/bom': <BomPage />,
+  '/design/drawing': <DrawingPage />,
+  '/design/change': <EcoPage />,
 };
 
 function FullscreenSpin() {

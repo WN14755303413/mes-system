@@ -19,6 +19,13 @@ const envSchema = z.object({
   SUPABASE_BUCKET_DRAWINGS: z.string().default('mes-drawings'),
   SUPABASE_BUCKET_ATTACHMENTS: z.string().default('mes-attachments'),
 
+  // 文件存储驱动（M5）。local：写本地磁盘，开发默认；supabase：Supabase Storage，生产用。
+  STORAGE_DRIVER: z.enum(['local', 'supabase']).default('local'),
+  // local 驱动的根目录。相对路径以 API 进程工作目录（apps/api）为基准。
+  STORAGE_LOCAL_DIR: z.string().default('./storage'),
+  // 单文件上传上限（MB）。图纸 PDF/DWG 通常几 MB 到几十 MB。
+  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(50),
+
   // 32 字节以上，避免弱密钥被暴力破解。生成：openssl rand -base64 48
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET 至少 32 字符'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET 至少 32 字符'),

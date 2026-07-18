@@ -19,6 +19,9 @@ logs/
 runtime/
 storage/logs/
 
+# M5 本地文件存储驱动的落盘目录（图纸等），文件本体不进版本库
+apps/api/storage/
+
 uploads/
 
 .idea/

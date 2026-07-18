@@ -8,33 +8,43 @@ import {
 import { AppException } from '../exceptions/app.exception';
 
 /**
- * 通用状态机（建设方案 §10.3）。
+ * 状态机校验（建设方案 §10.3）。
  *
- * 唯一依据是 shared 里的 RECORD_STATUS_TRANSITIONS —— 前后端共享同一张跃迁表，
- * 前端据此禁用非法的状态按钮，后端在此做强校验。非法跃迁一律拒绝，
- * 不信任前端传来的目标状态。
+ * 唯一依据是 shared 里的跃迁表 —— 前后端共享同一张表，前端据此禁用非法的
+ * 状态按钮，后端在此做强校验。非法跃迁一律拒绝，不信任前端传来的目标状态。
  *
- * 后续 BOM 版本、工单等凡是走「草稿→已发布→…」流程的对象都复用本服务。
+ * 通用对象（项目、工单等）用 assertTransition / nextStates（RecordStatus）；
+ * 有独立生命周期的对象（如 M5 的 BOM 版本）用 assertTransitionIn 传入自己的跃迁表。
  */
 @Injectable()
 export class StateMachineService {
-  /** 校验一次状态跃迁是否合法，非法则抛 ILLEGAL_STATE_TRANSITION。 */
-  assertTransition(from: RecordStatus, to: RecordStatus): void {
+  /** 按给定跃迁表校验一次状态跃迁，非法则抛 ILLEGAL_STATE_TRANSITION。 */
+  assertTransitionIn<S extends string>(
+    transitions: Record<S, readonly S[]>,
+    labels: Record<S, string>,
+    from: S,
+    to: S,
+  ): void {
     if (from === to) {
       throw new AppException(
         ErrorCode.ILLEGAL_STATE_TRANSITION,
-        `状态已是「${RECORD_STATUS_LABEL[to]}」，无需变更`,
+        `状态已是「${labels[to]}」，无需变更`,
         HttpStatus.BAD_REQUEST,
       );
     }
-    const allowed = RECORD_STATUS_TRANSITIONS[from] ?? [];
+    const allowed = transitions[from] ?? [];
     if (!allowed.includes(to)) {
       throw new AppException(
         ErrorCode.ILLEGAL_STATE_TRANSITION,
-        `不允许从「${RECORD_STATUS_LABEL[from]}」变更为「${RECORD_STATUS_LABEL[to]}」`,
+        `不允许从「${labels[from]}」变更为「${labels[to]}」`,
         HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  /** 校验通用状态机（RecordStatus）的一次跃迁。 */
+  assertTransition(from: RecordStatus, to: RecordStatus): void {
+    this.assertTransitionIn(RECORD_STATUS_TRANSITIONS, RECORD_STATUS_LABEL, from, to);
   }
 
   /** 某状态下允许跃迁到的目标状态列表，供前端渲染可选操作。 */

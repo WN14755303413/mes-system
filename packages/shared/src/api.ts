@@ -1,5 +1,7 @@
 import type { DataScope, UserStatus } from './enums';
 import type {
+  BomStatus,
+  DrawingStatus,
   IssuePriority,
   IssueStatus,
   RiskLevel,
@@ -467,6 +469,141 @@ export interface ProjectMemberItem {
 export interface SaveMemberRequest {
   userId: string;
   roleInProject?: string | null;
+}
+
+// ============================================================
+//  M5 BOM 与图纸：版本 / 明细 / ECO 版本链 / 图纸文件
+//
+//  前后端契约。BOM 版本走独立的 BomStatus 状态机（见 enums.ts），
+//  ECO 采用轻量版本链：新版本从 sourceBomId 派生并记录变更原因。
+// ============================================================
+
+// ---- BOM 版本 ----
+
+/** BOM 版本行。列表与「设计变更」版本链共用。 */
+export interface BomVersionItem {
+  id: string;
+  projectId: string;
+  /** 形如 V1.0（编码规则 §10.2：V主版本.次版本）。 */
+  version: string;
+  status: BomStatus;
+  remark: string | null;
+  /** ECO 变更原因。从旧版本派生时必填（业务方案 §8.2「变更必须记录原因」）。 */
+  changeReason: string | null;
+  /** 派生自哪个版本。初始版本为 null。 */
+  sourceBomId: string | null;
+  sourceVersion: string | null;
+  itemCount: number;
+  releasedAt: string | null;
+  releasedByName: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+/** BOM 明细行。 */
+export interface BomItemRow {
+  id: string;
+  bomId: string;
+  /** 行号，展示排序用。 */
+  seq: number;
+  materialCode: string;
+  materialName: string;
+  spec: string | null;
+  unit: string;
+  quantity: number;
+  /** 标准件 / 非标件（业务方案 §8.2）。 */
+  isStandard: boolean;
+  remark: string | null;
+  /** 关联图纸（可选）。 */
+  drawingId: string | null;
+  drawingCode: string | null;
+}
+
+export interface BomDetail extends BomVersionItem {
+  items: BomItemRow[];
+}
+
+/**
+ * 新建 BOM 版本。带 sourceBomId 即为「发起变更」（ECO）：
+ * 复制旧版明细、旧版置为变更中，changeReason 必填。
+ */
+export interface CreateBomRequest {
+  projectId: string;
+  /** 缺省由后端建议：初始 V1.0；派生时次版本 +1。 */
+  version?: string;
+  sourceBomId?: string;
+  changeReason?: string;
+  remark?: string | null;
+}
+
+export interface UpdateBomRequest {
+  remark?: string | null;
+  changeReason?: string | null;
+}
+
+/** BOM 状态流转（BomStatus 状态机，后端校验合法跃迁）。 */
+export interface ChangeBomStatusRequest {
+  status: BomStatus;
+}
+
+export interface SaveBomItemRequest {
+  materialCode: string;
+  materialName: string;
+  spec?: string | null;
+  unit?: string;
+  quantity: number;
+  isStandard?: boolean;
+  remark?: string | null;
+  drawingId?: string | null;
+}
+
+/** 批量追加明细（Excel 粘贴导入）。行号由后端自动续排。 */
+export interface BatchBomItemsRequest {
+  items: SaveBomItemRequest[];
+}
+
+// ---- 图纸 ----
+
+export interface DrawingItem {
+  id: string;
+  projectId: string;
+  /** 图号。 */
+  code: string;
+  name: string;
+  /** 设计端版本号（如 A、B、V2），MES 不重编。 */
+  version: string;
+  status: DrawingStatus;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedByName: string | null;
+  voidedAt: string | null;
+  remark: string | null;
+  createdAt: string;
+}
+
+export interface DrawingListQuery {
+  projectId: string;
+  status?: DrawingStatus;
+  keyword?: string;
+}
+
+/**
+ * 上传图纸的表单字段（multipart，随 file 一起提交）。
+ * 同项目同图号的其它有效版本会被自动作废，响应中以 supersededCount 提示。
+ */
+export interface UploadDrawingFields {
+  projectId: string;
+  code: string;
+  name: string;
+  version: string;
+  remark?: string;
+}
+
+export interface UploadDrawingResponse {
+  id: string;
+  /** 因本次上传被自动作废的旧版本数。 */
+  supersededCount: number;
 }
 
 /**
