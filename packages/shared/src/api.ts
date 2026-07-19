@@ -1,9 +1,17 @@
 import type { DataScope, UserStatus } from './enums';
 import type {
+  AcceptanceStatus,
+  AcceptanceType,
+  ACCEPTANCE_CONCLUSIONS,
   ArrivalType,
   AssemblyTaskStatus,
   BomStatus,
   CraftType,
+  DebugIssueActionType,
+  DebugIssueStatus,
+  DebugRecordStatus,
+  DebugStage,
+  DebugType,
   DispositionType,
   DrawingStatus,
   ExceptionStatus,
@@ -1417,6 +1425,347 @@ export interface RecheckQualityIssueRequest {
 
 export interface VoidQualityIssueRequest {
   note?: string | null;
+}
+
+// ============================================================
+//  M9 调试与验收：调试记录 / 调试问题多轮闭环 / FAT-SAT 验收
+//
+//  调试记录 = 单头 + 参数明细行（DBG-）；调试问题 = 多轮整改复测闭环（DI-），
+//  与 M8 质量问题单同构但独立统计；验收单 = 单头 + 检查项（FAT-/SAT-），
+//  结论「通过」有门禁：项目存在未关闭调试问题时后端拒绝（§9.8）。
+//  一期无设备实体，设备编号以文本快照记录（同 FQC 的 batchNo 思路）。
+// ============================================================
+
+// ---- 调试记录 ----
+
+/** 调试参数明细行（创建/编辑时提交）。passed 为 null 表示未判定达标性。 */
+export interface DebugParamInput {
+  name: string;
+  standard?: string | null;
+  actual?: string | null;
+  unit?: string | null;
+  passed?: boolean | null;
+  remark?: string | null;
+}
+
+export interface DebugParamRow extends DebugParamInput {
+  id: string;
+  seq: number;
+}
+
+export interface DebugRecordRow {
+  id: string;
+  /** DBG-YYYYMMDD-XXX */
+  code: string;
+  type: DebugType;
+  status: DebugRecordStatus;
+  projectId: string;
+  projectCode: string | null;
+  projectName: string | null;
+  /** 设备编号快照（EQ-…），一期自由文本。 */
+  equipmentNo: string | null;
+  title: string;
+  content: string | null;
+  executorId: string | null;
+  executorName: string | null;
+  debugAt: string;
+  completedByName: string | null;
+  completedAt: string | null;
+  remark: string | null;
+  paramCount: number;
+  /** 未达标参数行数。 */
+  failedParamCount: number;
+  /** 挂在本记录下的调试问题数（未关闭）。 */
+  openIssueCount: number;
+  photoCount: number;
+  createdAt: string;
+}
+
+export interface DebugRecordDetail extends DebugRecordRow {
+  params: DebugParamRow[];
+  photos: AttachmentItem[];
+  /** 挂在本记录下的调试问题（追溯入口）。 */
+  issues: { id: string; code: string; title: string; status: DebugIssueStatus }[];
+}
+
+export interface DebugRecordListQuery {
+  type?: DebugType;
+  status?: DebugRecordStatus;
+  projectId?: string;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateDebugRecordRequest {
+  type: DebugType;
+  title: string;
+  projectId: string;
+  equipmentNo?: string | null;
+  content?: string | null;
+  /** 调试人，缺省为当前用户。 */
+  executorId?: string | null;
+  /** 调试日期，缺省为当前时间。 */
+  debugAt?: string | null;
+  remark?: string | null;
+  params?: DebugParamInput[];
+}
+
+/** 编辑调试记录（仅调试中）。params 全量替换。 */
+export interface UpdateDebugRecordRequest {
+  title?: string;
+  equipmentNo?: string | null;
+  content?: string | null;
+  executorId?: string | null;
+  debugAt?: string | null;
+  remark?: string | null;
+  params?: DebugParamInput[];
+}
+
+// ---- 调试问题 ----
+
+export interface DebugIssueRow {
+  id: string;
+  /** DI-YYYYMMDD-XXX */
+  code: string;
+  status: DebugIssueStatus;
+  severity: IssueSeverity;
+  stage: DebugStage;
+  projectId: string;
+  projectCode: string | null;
+  projectName: string | null;
+  recordId: string | null;
+  recordCode: string | null;
+  equipmentNo: string | null;
+  title: string;
+  description: string | null;
+  /** 最新整改措施说明（每轮历史见动作时间线）。 */
+  solution: string | null;
+  reporterId: string | null;
+  reporterName: string | null;
+  handlerId: string | null;
+  handlerName: string | null;
+  closedByName: string | null;
+  closedAt: string | null;
+  photoCount: number;
+  createdAt: string;
+}
+
+export interface DebugIssueActionItem {
+  id: string;
+  type: DebugIssueActionType;
+  note: string | null;
+  operatorName: string | null;
+  createdAt: string;
+}
+
+export interface DebugIssueDetail extends DebugIssueRow {
+  /** 动作时间线，按时间正序。多轮整改复测历史完整可查。 */
+  actions: DebugIssueActionItem[];
+  photos: AttachmentItem[];
+}
+
+export interface DebugIssueListQuery {
+  status?: DebugIssueStatus;
+  severity?: IssueSeverity;
+  stage?: DebugStage;
+  projectId?: string;
+  recordId?: string;
+  /** 只看我发起或我负责的（无 debug:read 权限时后端强制生效）。 */
+  onlyMine?: boolean;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** 发起调试问题。关联调试记录时项目/设备号自动反查。 */
+export interface CreateDebugIssueRequest {
+  title: string;
+  description?: string | null;
+  severity?: IssueSeverity;
+  stage?: DebugStage;
+  projectId?: string | null;
+  recordId?: string | null;
+  equipmentNo?: string | null;
+}
+
+/** 编辑基础信息（非终态；debug:write 或责任人本人）。 */
+export interface UpdateDebugIssueRequest {
+  title?: string;
+  description?: string | null;
+  severity?: IssueSeverity;
+  stage?: DebugStage;
+  equipmentNo?: string | null;
+  solution?: string | null;
+}
+
+export interface AssignDebugIssueRequest {
+  handlerId: string;
+  note?: string | null;
+}
+
+/** 责任人提交整改：流转到待复测，可同时更新整改措施。 */
+export interface SubmitDebugIssueRequest {
+  note: string;
+  solution?: string | null;
+}
+
+/** 复测：通过即关闭，不通过退回整改中。 */
+export interface RecheckDebugIssueRequest {
+  pass: boolean;
+  note?: string | null;
+}
+
+export interface VoidDebugIssueRequest {
+  note?: string | null;
+}
+
+// ---- FAT / SAT 验收 ----
+
+/** 验收检查项（创建/编辑时提交）。passed 为 null 表示未核查。 */
+export interface AcceptanceItemInput {
+  name: string;
+  standard?: string | null;
+  actual?: string | null;
+  passed?: boolean | null;
+  remark?: string | null;
+}
+
+export interface AcceptanceItemRow extends AcceptanceItemInput {
+  id: string;
+  seq: number;
+}
+
+export interface AcceptanceRow {
+  id: string;
+  /** FAT-YYYYMMDD-XXX / SAT-YYYYMMDD-XXX */
+  code: string;
+  type: AcceptanceType;
+  status: AcceptanceStatus;
+  projectId: string;
+  projectCode: string | null;
+  projectName: string | null;
+  customerName: string | null;
+  equipmentNo: string | null;
+  title: string;
+  /** 计划验收日期。 */
+  plannedAt: string | null;
+  /** 验收地点（SAT 为客户现场）。 */
+  location: string | null;
+  /** 客户代表（签字记录快照）。 */
+  customerRep: string | null;
+  /** 结论说明；有条件通过时为遗留问题与整改期限说明（必填）。 */
+  conclusion: string | null;
+  createdByName: string | null;
+  concludedByName: string | null;
+  concludedAt: string | null;
+  remark: string | null;
+  itemCount: number;
+  failedItemCount: number;
+  createdAt: string;
+}
+
+export interface AcceptanceDetail extends AcceptanceRow {
+  items: AcceptanceItemRow[];
+}
+
+export interface AcceptanceListQuery {
+  type?: AcceptanceType;
+  status?: AcceptanceStatus;
+  projectId?: string;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateAcceptanceRequest {
+  type: AcceptanceType;
+  title: string;
+  projectId: string;
+  equipmentNo?: string | null;
+  plannedAt?: string | null;
+  location?: string | null;
+  customerRep?: string | null;
+  remark?: string | null;
+  items?: AcceptanceItemInput[];
+}
+
+/** 编辑验收单（仅验收中）。items 全量替换。 */
+export interface UpdateAcceptanceRequest {
+  title?: string;
+  equipmentNo?: string | null;
+  plannedAt?: string | null;
+  location?: string | null;
+  customerRep?: string | null;
+  remark?: string | null;
+  items?: AcceptanceItemInput[];
+}
+
+/**
+ * 出具验收结论。PASSED 时后端校验项目无未关闭调试问题，否则 409；
+ * CONDITIONAL 时 conclusion 必填（遗留问题与整改期限）。
+ */
+export interface ConcludeAcceptanceRequest {
+  result: (typeof ACCEPTANCE_CONCLUSIONS)[number];
+  conclusion?: string | null;
+}
+
+// ---- 验收报告（打印视图数据源，M9 验收标准「生成 FAT 报告 PDF」）----
+
+/** 报告内的调试记录摘要行。 */
+export interface ReportDebugRecordItem {
+  code: string;
+  type: DebugType;
+  title: string;
+  status: DebugRecordStatus;
+  executorName: string | null;
+  debugAt: string;
+  paramCount: number;
+  failedParamCount: number;
+}
+
+/** 报告内的调试问题摘要行。 */
+export interface ReportDebugIssueItem {
+  code: string;
+  title: string;
+  stage: DebugStage;
+  severity: IssueSeverity;
+  status: DebugIssueStatus;
+  handlerName: string | null;
+  closedAt: string | null;
+}
+
+/** 报告内的出厂/调试检验摘要行（M8 联动：FQC 与 DEBUG 类检验）。 */
+export interface ReportInspectionItem {
+  code: string;
+  type: InspectionType;
+  title: string;
+  status: InspectionStatus;
+  judgedAt: string | null;
+}
+
+/**
+ * 验收报告聚合数据。后端一次拼齐，前端打印视图（A4）渲染，
+ * 浏览器「打印 → 另存为 PDF」即报告文件——中文排版由浏览器保证，服务端零重依赖。
+ */
+export interface AcceptanceReport {
+  acceptance: AcceptanceDetail;
+  project: {
+    code: string;
+    name: string;
+    customerName: string | null;
+    contractNo: string | null;
+    projectType: string | null;
+    managerName: string | null;
+    planEndAt: string | null;
+  };
+  debugRecords: ReportDebugRecordItem[];
+  debugIssues: ReportDebugIssueItem[];
+  /** 未关闭调试问题数（报告置顶提示；PASSED 门禁的依据）。 */
+  openDebugIssueCount: number;
+  inspections: ReportInspectionItem[];
+  /** 报告生成时间（服务端时间）。 */
+  generatedAt: string;
 }
 
 /**

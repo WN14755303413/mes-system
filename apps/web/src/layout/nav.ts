@@ -86,6 +86,7 @@ export const NAV_TREE: readonly NavItem[] = [
     permissions: ['debug:read', 'acceptance:write'],
     children: [
       { path: '/commissioning/record', title: '调试记录', permissions: ['debug:read'] },
+      { path: '/commissioning/issue', title: '调试问题', permissions: ['debug:read'] },
       { path: '/commissioning/acceptance', title: 'FAT / SAT 验收', permissions: ['debug:read'] },
     ],
   },

@@ -42,6 +42,12 @@ import ExceptionPage from '@/pages/production/exception/ExceptionPage';
 import InspectionPage from '@/pages/quality/inspection/InspectionPage';
 import IssuePage from '@/pages/quality/issue/IssuePage';
 
+// M9 调试与验收：调试记录 / 调试问题闭环 / FAT-SAT 验收与报告
+import DebugRecordPage from '@/pages/commissioning/record/DebugRecordPage';
+import DebugIssuePage from '@/pages/commissioning/issue/DebugIssuePage';
+import AcceptancePage from '@/pages/commissioning/acceptance/AcceptancePage';
+import AcceptanceReportPage from '@/pages/commissioning/acceptance/AcceptanceReportPage';
+
 /** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
 const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/user': <UserListPage />,
@@ -64,6 +70,9 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/production/exception': <ExceptionPage />,
   '/quality/inspection': <InspectionPage />,
   '/quality/issue': <IssuePage />,
+  '/commissioning/record': <DebugRecordPage />,
+  '/commissioning/issue': <DebugIssuePage />,
+  '/commissioning/acceptance': <AcceptancePage />,
 };
 
 function FullscreenSpin() {
@@ -123,6 +132,16 @@ export function AppRoutes() {
           <RedirectIfAuthed>
             <LoginPage />
           </RedirectIfAuthed>
+        }
+      />
+
+      {/* 验收报告打印视图：A4 版式独立于主框架（无侧栏/顶栏），浏览器打印出 PDF */}
+      <Route
+        path="/commissioning/acceptance/report/:id"
+        element={
+          <RequireAuth>
+            <AcceptanceReportPage />
+          </RequireAuth>
         }
       />
 

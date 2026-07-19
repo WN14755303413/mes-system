@@ -584,3 +584,150 @@ export const ISSUE_ACTION_RULES: Record<
   RECHECK_FAIL: { from: ['RECHECKING'], to: 'HANDLING' },
   VOID: { from: ['OPEN', 'HANDLING', 'RECHECKING'], to: 'VOIDED' },
 };
+
+// ============================================================
+//  调试与验收域枚举（M9，业务方案 §8.8 / §9.8 / §9.9）
+// ============================================================
+
+/** 调试类型（业务方案 §8.8：电气调试记录、软件调试记录、工艺调试记录）。 */
+export const DebugType = {
+  ELEC: 'ELEC', // 电气调试
+  SOFT: 'SOFT', // 软件调试
+  PROC: 'PROC', // 工艺调试（湿法工艺）
+} as const;
+export type DebugType = (typeof DebugType)[keyof typeof DebugType];
+
+export const DEBUG_TYPE_LABEL: Record<DebugType, string> = {
+  ELEC: '电气调试',
+  SOFT: '软件调试',
+  PROC: '工艺调试',
+};
+
+/**
+ * 调试记录状态。调试是现场动作，创建即开始（无草稿态）；
+ * 完成后随参数明细一起锁定，错了作废重录——与检验单同哲学。
+ */
+export const DebugRecordStatus = {
+  IN_PROGRESS: 'IN_PROGRESS', // 调试中（单头与参数可编辑）
+  COMPLETED: 'COMPLETED', // 已完成（锁定）
+  VOIDED: 'VOIDED', // 已作废
+} as const;
+export type DebugRecordStatus = (typeof DebugRecordStatus)[keyof typeof DebugRecordStatus];
+
+export const DEBUG_RECORD_STATUS_LABEL: Record<DebugRecordStatus, string> = {
+  IN_PROGRESS: '调试中',
+  COMPLETED: '已完成',
+  VOIDED: '已作废',
+};
+
+/**
+ * 问题发现阶段。FAT/SAT 现场发现的问题与调试期问题走同一张闭环清单
+ * （§9.8「FAT 验收前确认问题状态」、§9.9「记录 SAT 问题」），按阶段区分统计。
+ */
+export const DebugStage = {
+  DEBUG: 'DEBUG', // 厂内调试
+  FAT: 'FAT', // FAT 出厂验收
+  SAT: 'SAT', // SAT 客户现场验收
+} as const;
+export type DebugStage = (typeof DebugStage)[keyof typeof DebugStage];
+
+export const DEBUG_STAGE_LABEL: Record<DebugStage, string> = {
+  DEBUG: '厂内调试',
+  FAT: 'FAT 验收',
+  SAT: 'SAT 验收',
+};
+
+/**
+ * 调试问题状态（§8.8 问题清单 + 多轮整改复测）。
+ * 与 M8 质量问题单同构但独立成域——调试问题的责任方多为设计/软件，
+ * 统计口径（看板「调试问题数量」）也与质量问题分列，共用枚举会耦合两域。
+ */
+export const DebugIssueStatus = {
+  OPEN: 'OPEN', // 待分派
+  HANDLING: 'HANDLING', // 整改中
+  RECHECKING: 'RECHECKING', // 待复测
+  CLOSED: 'CLOSED', // 已关闭（复测通过）
+  VOIDED: 'VOIDED', // 已作废（误报）
+} as const;
+export type DebugIssueStatus = (typeof DebugIssueStatus)[keyof typeof DebugIssueStatus];
+
+export const DEBUG_ISSUE_STATUS_LABEL: Record<DebugIssueStatus, string> = {
+  OPEN: '待分派',
+  HANDLING: '整改中',
+  RECHECKING: '待复测',
+  CLOSED: '已关闭',
+  VOIDED: '已作废',
+};
+
+/** 调试问题动作类型。动作日志只增不改，多轮整改复测历史由此完整可查。 */
+export const DebugIssueActionType = {
+  CREATE: 'CREATE', // 创建
+  ASSIGN: 'ASSIGN', // 分派/改派责任人
+  SUBMIT: 'SUBMIT', // 责任人提交整改
+  RECHECK_PASS: 'RECHECK_PASS', // 复测通过（即关闭）
+  RECHECK_FAIL: 'RECHECK_FAIL', // 复测不通过（退回整改）
+  VOID: 'VOID', // 作废
+} as const;
+export type DebugIssueActionType = (typeof DebugIssueActionType)[keyof typeof DebugIssueActionType];
+
+export const DEBUG_ISSUE_ACTION_LABEL: Record<DebugIssueActionType, string> = {
+  CREATE: '创建',
+  ASSIGN: '分派',
+  SUBMIT: '提交整改',
+  RECHECK_PASS: '复测通过',
+  RECHECK_FAIL: '复测退回',
+  VOID: '作废',
+};
+
+/** 调试问题动作规则（同 ISSUE_ACTION_RULES 的哲学：前后端同一张表）。 */
+export const DEBUG_ISSUE_ACTION_RULES: Record<
+  Exclude<DebugIssueActionType, 'CREATE'>,
+  { from: readonly DebugIssueStatus[]; to: DebugIssueStatus }
+> = {
+  ASSIGN: { from: ['OPEN', 'HANDLING'], to: 'HANDLING' },
+  SUBMIT: { from: ['HANDLING'], to: 'RECHECKING' },
+  RECHECK_PASS: { from: ['RECHECKING'], to: 'CLOSED' },
+  RECHECK_FAIL: { from: ['RECHECKING'], to: 'HANDLING' },
+  VOID: { from: ['OPEN', 'HANDLING', 'RECHECKING'], to: 'VOIDED' },
+};
+
+/** 验收类型（§8.8：FAT 出厂验收 / SAT 客户现场验收）。编号前缀直接用类型。 */
+export const AcceptanceType = {
+  FAT: 'FAT',
+  SAT: 'SAT',
+} as const;
+export type AcceptanceType = (typeof AcceptanceType)[keyof typeof AcceptanceType];
+
+export const ACCEPTANCE_TYPE_LABEL: Record<AcceptanceType, string> = {
+  FAT: 'FAT 出厂验收',
+  SAT: 'SAT 现场验收',
+};
+
+/**
+ * 验收单状态。验收中（检查项可编辑）→ 出具结论即终态（锁定），同检验单哲学。
+ * 「通过」有门禁：项目存在未关闭调试问题时后端拒绝（§9.8）；
+ * 「有条件通过」= 带遗留问题交付，遗留说明必填，报告中明示。
+ */
+export const AcceptanceStatus = {
+  PENDING: 'PENDING', // 验收中
+  PASSED: 'PASSED', // 通过
+  CONDITIONAL: 'CONDITIONAL', // 有条件通过（有遗留问题）
+  FAILED: 'FAILED', // 不通过
+  VOIDED: 'VOIDED', // 已作废
+} as const;
+export type AcceptanceStatus = (typeof AcceptanceStatus)[keyof typeof AcceptanceStatus];
+
+export const ACCEPTANCE_STATUS_LABEL: Record<AcceptanceStatus, string> = {
+  PENDING: '验收中',
+  PASSED: '通过',
+  CONDITIONAL: '有条件通过',
+  FAILED: '不通过',
+  VOIDED: '已作废',
+};
+
+/** conclude 动作允许的结论集合（PENDING → 三种终态之一）。 */
+export const ACCEPTANCE_CONCLUSIONS = [
+  AcceptanceStatus.PASSED,
+  AcceptanceStatus.CONDITIONAL,
+  AcceptanceStatus.FAILED,
+] as const;

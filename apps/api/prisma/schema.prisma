@@ -110,6 +110,16 @@ model User {
   closedQualityIssues   QualityIssue[]       @relation("QualityIssueCloser")
   qualityIssueActions   QualityIssueAction[] @relation("QualityIssueOperator")
 
+  // 调试与验收域反向关系（M9）
+  executedDebugRecords  DebugRecord[]      @relation("DebugRecordExecutor")
+  completedDebugRecords DebugRecord[]      @relation("DebugRecordCompleter")
+  reportedDebugIssues   DebugIssue[]       @relation("DebugIssueReporter")
+  handledDebugIssues    DebugIssue[]       @relation("DebugIssueHandler")
+  closedDebugIssues     DebugIssue[]       @relation("DebugIssueCloser")
+  debugIssueActions     DebugIssueAction[] @relation("DebugIssueOperator")
+  createdAcceptances    Acceptance[]       @relation("AcceptanceCreator")
+  concludedAcceptances  Acceptance[]       @relation("AcceptanceConcluder")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -386,6 +396,11 @@ model Project {
   // 质量管理域反向关系（M8）
   inspections   Inspection[]   @relation("InspectionProject")
   qualityIssues QualityIssue[] @relation("QualityIssueProject")
+
+  // 调试与验收域反向关系（M9）
+  debugRecords DebugRecord[] @relation("DebugRecordProject")
+  debugIssues  DebugIssue[]  @relation("DebugIssueProject")
+  acceptances  Acceptance[]  @relation("AcceptanceProject")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1215,4 +1230,238 @@ model QualityIssueAction {
 
   @@index([issueId, createdAt])
   @@map("qc_issue_action")
+}
+
+// ============================================================
+//  调试与验收域（M9，业务方案 §8.8 / §9.8 / §9.9）
+//
+//  一期无设备实体（一机一档在二期），设备编号以文本快照记录，
+//  同 FQC 用 batchNo 记设备号的思路；届时补可空外键即可反向挂档。
+//  调试记录创建即开始（无草稿态），完成即锁定；调试问题走多轮
+//  整改复测闭环（与 M8 问题单同构但独立统计）；FAT/SAT 验收单
+//  出具结论即终态，「通过」有未关闭调试问题门禁（§9.8）。
+// ============================================================
+
+/// 调试记录（M9）。编号 DBG-YYYYMMDD-XXX。单头 + 参数明细行，
+/// 电气/软件/工艺三类（DebugType）。IN_PROGRESS 可编辑，COMPLETED 锁定。
+model DebugRecord {
+  id   String @id @default(cuid())
+  code String @unique
+
+  /// DebugType：ELEC/SOFT/PROC。
+  type String
+
+  /// DebugRecordStatus。创建即调试中；完成/作废为终态。
+  status String @default("IN_PROGRESS")
+
+  projectId String  @map("project_id")
+  project   Project @relation("DebugRecordProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// 设备编号快照（EQ-…）。一期自由文本，设备实体就绪后补外键。
+  equipmentNo String? @map("equipment_no")
+
+  /// 调试对象/内容概述，如「机械手示教与运动调试」。
+  title String
+
+  /// 调试过程与结果说明。
+  content String?
+
+  /// 调试人（默认创建人，可指定他人）。
+  executorId String? @map("executor_id")
+  executor   User?   @relation("DebugRecordExecutor", fields: [executorId], references: [id], onDelete: SetNull)
+
+  /// 调试日期（现场实际时间，允许补录）。
+  debugAt DateTime @default(now()) @map("debug_at")
+
+  completedById String?   @map("completed_by_id")
+  completedBy   User?     @relation("DebugRecordCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+  completedAt   DateTime? @map("completed_at")
+
+  remark String?
+
+  params DebugParam[]
+  issues DebugIssue[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([type, status])
+  @@index([executorId])
+  @@map("debug_record")
+}
+
+/// 调试参数明细行（§8.8 参数记录）。完成后随单锁定。
+model DebugParam {
+  id       String      @id @default(cuid())
+  recordId String      @map("record_id")
+  record   DebugRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  /// 单内行号，展示排序用。
+  seq Int
+
+  /// 参数项，如「药液流量」「腔体温度」。
+  name String
+  /// 标准值/范围，如「2.0±0.1 L/min」。
+  standard String?
+  /// 实测值。
+  actual String?
+  unit   String?
+  /// 达标判定；null=未判定。
+  passed Boolean?
+  remark String?
+
+  @@index([recordId])
+  @@map("debug_param")
+}
+
+/// 调试问题（M9，§8.8 问题清单 + 多轮整改复测）。编号 DI-YYYYMMDD-XXX。
+/// 流转：OPEN →（分派）HANDLING →（提交整改）RECHECKING →（复测通过）CLOSED，
+/// 复测不通过退回 HANDLING；未关闭前可 VOIDED。动作规则唯一依据
+/// shared DEBUG_ISSUE_ACTION_RULES。FAT/SAT 现场问题同走本清单，按 stage 区分。
+model DebugIssue {
+  id   String @id @default(cuid())
+  code String @unique
+
+  /// DebugIssueStatus。
+  status String @default("OPEN")
+
+  /// IssueSeverity：LOW/MEDIUM/HIGH/CRITICAL（与 M8 同一严重度语义）。
+  severity String @default("MEDIUM")
+
+  /// DebugStage：DEBUG/FAT/SAT，问题发现阶段。
+  stage String @default("DEBUG")
+
+  projectId String  @map("project_id")
+  project   Project @relation("DebugIssueProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// 可选关联调试记录。删除记录不删问题，置空保历史。
+  recordId String?      @map("record_id")
+  record   DebugRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+
+  equipmentNo String? @map("equipment_no")
+
+  title       String
+  description String?
+
+  /// 最新整改措施说明；每轮流转历史见动作日志。
+  solution String?
+
+  reporterId String? @map("reporter_id")
+  reporter   User?   @relation("DebugIssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  /// 责任人。分派后进入 HANDLING；提交整改仅限本人（或有 debug:write 者代提）。
+  handlerId String? @map("handler_id")
+  handler   User?   @relation("DebugIssueHandler", fields: [handlerId], references: [id], onDelete: SetNull)
+
+  closedById String?   @map("closed_by_id")
+  closedBy   User?     @relation("DebugIssueCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt   DateTime? @map("closed_at")
+
+  actions DebugIssueAction[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([recordId])
+  @@index([stage, status])
+  @@index([handlerId, status])
+  @@index([reporterId])
+  @@map("debug_issue")
+}
+
+/// 调试问题动作日志。只增不改不删，多轮整改复测历史完整可查（同 qc_issue_action）。
+model DebugIssueAction {
+  id      String     @id @default(cuid())
+  issueId String     @map("issue_id")
+  issue   DebugIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  /// DebugIssueActionType：CREATE/ASSIGN/SUBMIT/RECHECK_PASS/RECHECK_FAIL/VOID。
+  type String
+
+  note String?
+
+  operatorId String? @map("operator_id")
+  operator   User?   @relation("DebugIssueOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([issueId, createdAt])
+  @@map("debug_issue_action")
+}
+
+/// FAT/SAT 验收单（M9，§8.8 / §9.8 / §9.9）。编号 FAT-YYYYMMDD-XXX / SAT-YYYYMMDD-XXX。
+/// 单头 + 检查项明细。PENDING 可编辑；conclude 出具结论即终态锁定：
+/// PASSED 有门禁（项目存在未关闭调试问题时拒绝），CONDITIONAL 必须写明遗留问题。
+/// 验收报告不落表——报告接口实时聚合项目调试/问题/检验数据，前端打印视图出 PDF。
+model Acceptance {
+  id   String @id @default(cuid())
+  code String @unique
+
+  /// AcceptanceType：FAT/SAT。
+  type String
+
+  /// AcceptanceStatus。PENDING → PASSED/CONDITIONAL/FAILED 终态，PENDING 可作废。
+  status String @default("PENDING")
+
+  projectId String  @map("project_id")
+  project   Project @relation("AcceptanceProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  equipmentNo String? @map("equipment_no")
+
+  /// 验收对象说明，如「单片清洗机 FAT 出厂验收」。
+  title String
+
+  plannedAt DateTime? @map("planned_at")
+
+  /// 验收地点（SAT 为客户现场）。
+  location String?
+
+  /// 客户代表姓名快照（纸质签字的电子记录）。
+  customerRep String? @map("customer_rep")
+
+  /// 结论说明。CONDITIONAL 时必填：遗留问题与整改期限。
+  conclusion String?
+
+  createdById String? @map("created_by_id")
+  createdBy   User?   @relation("AcceptanceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  concludedById String?   @map("concluded_by_id")
+  concludedBy   User?     @relation("AcceptanceConcluder", fields: [concludedById], references: [id], onDelete: SetNull)
+  concludedAt   DateTime? @map("concluded_at")
+
+  remark String?
+
+  items AcceptanceItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([type, status])
+  @@map("debug_acceptance")
+}
+
+/// 验收检查项明细行。出具结论后随单锁定。
+model AcceptanceItem {
+  id           String     @id @default(cuid())
+  acceptanceId String     @map("acceptance_id")
+  acceptance   Acceptance @relation(fields: [acceptanceId], references: [id], onDelete: Cascade)
+
+  /// 单内行号，展示排序用。
+  seq Int
+
+  /// 检查项，如「UPH 产能验证」「安全联锁测试」。
+  name String
+  /// 验收标准。
+  standard String?
+  /// 实测/核查结果。
+  actual String?
+  /// 单项判定；null=未核查。
+  passed Boolean?
+  remark String?
+
+  @@index([acceptanceId])
+  @@map("debug_acceptance_item")
 }

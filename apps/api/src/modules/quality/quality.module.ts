@@ -10,9 +10,11 @@ import { QcPhotoService } from './services/qc-photo.service';
  *
  * 检验不合格在 judge 事务内自动生成问题单（InspectionService → IssueService）。
  * PrismaService、CodeGeneratorService、StorageService 由全局模块提供。
+ * QcPhotoService 导出给 M9 调试域复用（同一张通用附件表）。
  */
 @Module({
   controllers: [InspectionController, IssueController],
   providers: [InspectionService, IssueService, QcPhotoService],
+  exports: [QcPhotoService],
 })
 export class QualityModule {}
