@@ -4,6 +4,7 @@ import type { AuthenticatedRequest } from '../guards/jwt-auth.guard';
 
 export const IS_PUBLIC_KEY = 'auth:public';
 export const PERMISSIONS_KEY = 'auth:permissions';
+export const ANY_PERMISSIONS_KEY = 'auth:any-permissions';
 export const ALLOW_PASSWORD_CHANGE_PENDING = 'auth:allow-pwd-pending';
 
 /** 跳过认证。全局 Guard 默认拦截一切，公开接口必须显式标注。 */
@@ -12,6 +13,14 @@ export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 /** 要求持有全部列出的权限点。 */
 export const RequirePermission = (...permissions: Permission[]) =>
   SetMetadata(PERMISSIONS_KEY, permissions);
+
+/**
+ * 要求持有列出权限点中的任意一个（anyOf）。
+ * 用于同一接口面向多种角色的场景（如异常单：计划员看全部、现场看自己）——
+ * 具体的数据范围收窄仍在 service 内按实际权限分支，这里只挡住两者皆无的请求。
+ */
+export const RequireAnyPermission = (...permissions: Permission[]) =>
+  SetMetadata(ANY_PERMISSIONS_KEY, permissions);
 
 /**
  * 允许 mustChangePassword=true 的用户访问。

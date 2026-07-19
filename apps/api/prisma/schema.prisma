@@ -93,6 +93,15 @@ model User {
   requestedRequisitions Requisition[] @relation("RequisitionRequester")
   confirmedRequisitions Requisition[] @relation("RequisitionConfirmer")
 
+  // 生产执行域反向关系（M7）
+  createdWorkOrders  WorkOrder[]     @relation("WorkOrderCreator")
+  assignedTasks      AssemblyTask[]  @relation("AssemblyTaskAssignee")
+  workReports        WorkReport[]    @relation("WorkReporter")
+  reportedExceptions WorkException[] @relation("ExceptionReporter")
+  handledExceptions  WorkException[] @relation("ExceptionHandler")
+  closedExceptions   WorkException[] @relation("ExceptionCloser")
+  uploadedFiles      Attachment[]    @relation("AttachmentUploader")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -362,6 +371,10 @@ model Project {
   stocks       Stock[]             @relation("StockProject")
   requisitions Requisition[]       @relation("RequisitionProject")
 
+  // 生产执行域反向关系（M7）
+  workOrders     WorkOrder[]     @relation("WorkOrderProject")
+  prodExceptions WorkException[] @relation("ExceptionProject")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -416,6 +429,9 @@ model ProjectTask {
   status   String @default("DRAFT")
 
   sort Int @default(0)
+
+  /// 关联到本 WBS 节点的装配工单（M7）。工单报工进度回写本节点。
+  workOrders WorkOrder[] @relation("WorkOrderWbsTask")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -784,6 +800,8 @@ model Drawing {
   remark   String?
 
   bomItems BomItem[]
+  /// 关联本图纸的装配任务（M7）。装配工在「我的任务」里按图作业。
+  assemblyTasks AssemblyTask[] @relation("AssemblyTaskDrawing")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -791,4 +809,208 @@ model Drawing {
   @@unique([projectId, code, version])
   @@index([projectId, status])
   @@map("drawing")
+}
+
+// ============================================================
+//  生产执行域（M7）
+//
+//  一期不建独立「生产计划」实体（业务方案 §8.4：不做复杂 APS）——
+//  装配工单即计划单元：按设备/专业开单，带计划与实际日期；任务即工序计划，
+//  派工到人。任务状态只由报工动作驱动（shared REPORT_ACTION_RULES），
+//  报工在同一事务里累加工时、重算任务与工单进度，并回写关联的 WBS 任务，
+//  这样 M4 甘特图与项目台账即时反映现场进度（M7 验收「报工回写项目进度」）。
+// ============================================================
+
+/// 装配工单。编号 WO-YYYYMMDD-XXX；status 走通用 RecordStatus 状态机
+/// （草稿→已发布(下达)→执行中→…）。progress 由任务按标准工时加权汇总。
+model WorkOrder {
+  id   String @id @default(cuid())
+  code String @unique
+
+  projectId String  @map("project_id")
+  project   Project @relation("WorkOrderProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  name String
+  /// 装配专业（CraftType）：机械/电气/管路/其它。仅草稿态可改。
+  craft String @default("MECH")
+
+  status String @default("DRAFT")
+
+  planStartAt   DateTime? @map("plan_start_at")
+  planEndAt     DateTime? @map("plan_end_at")
+  /// 首次报工自动写入；完工确认时写 actualEndAt。
+  actualStartAt DateTime? @map("actual_start_at")
+  actualEndAt   DateTime? @map("actual_end_at")
+
+  /// 0-100。报工事务内按任务标准工时加权重算，不由前端提交。
+  progress Int @default(0)
+
+  /// 关联的项目 WBS 任务；工单进度变化时回写其 progress/status（甘特图联动）。
+  wbsTaskId String?      @map("wbs_task_id")
+  wbsTask   ProjectTask? @relation("WorkOrderWbsTask", fields: [wbsTaskId], references: [id], onDelete: SetNull)
+
+  createdById String? @map("created_by_id")
+  createdBy   User?   @relation("WorkOrderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  remark String?
+
+  tasks      AssemblyTask[]
+  exceptions WorkException[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([status])
+  @@map("prod_work_order")
+}
+
+/// 装配任务（工序级派工单元）。装配工只能看到 assigneeId 为本人、
+/// 且所属工单已下达的任务——行级过滤在 my-tasks 接口内强制。
+model AssemblyTask {
+  id          String    @id @default(cuid())
+  workOrderId String    @map("work_order_id")
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  /// 工单内行号，展示排序用，新增自动续排。
+  seq  Int
+  name String
+
+  assigneeId String? @map("assignee_id")
+  assignee   User?   @relation("AssemblyTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  /// AssemblyTaskStatus。只由报工动作驱动（REPORT_ACTION_RULES）。
+  status String @default("PENDING")
+
+  planStartAt   DateTime? @map("plan_start_at")
+  planEndAt     DateTime? @map("plan_end_at")
+  actualStartAt DateTime? @map("actual_start_at")
+  actualEndAt   DateTime? @map("actual_end_at")
+
+  /// 标准工时（小时）。既是工单进度加权权重，也是工时分析基准。
+  standardHours Decimal? @map("standard_hours") @db.Decimal(7, 1)
+  /// 累计实际工时（小时），报工累加。Decimal 防浮点累加误差。
+  actualHours   Decimal  @default(0) @map("actual_hours") @db.Decimal(8, 1)
+
+  progress Int @default(0)
+
+  /// 作业图纸。现场从任务直达图纸预览（走 M5 下载接口，留审计）。
+  drawingId String?  @map("drawing_id")
+  drawing   Drawing? @relation("AssemblyTaskDrawing", fields: [drawingId], references: [id], onDelete: SetNull)
+
+  /// 作业要求/指导说明。一期为文本；完整作业指导书属后续工艺模块。
+  requirement String?
+  remark      String?
+
+  reports    WorkReport[]
+  exceptions WorkException[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([workOrderId])
+  @@index([assigneeId, status])
+  @@map("prod_task")
+}
+
+/// 报工记录（一次动作）。现场真实执行数据（业务方案 §5.1「只在 MES 中产生」），
+/// 只增不改不删——写错就再报一笔修正，保留完整轨迹。
+model WorkReport {
+  id     String       @id @default(cuid())
+  taskId String       @map("task_id")
+  task   AssemblyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  /// WorkReportType：START/PROGRESS/PAUSE/RESUME/COMPLETE/REWORK。
+  type String
+
+  /// 本次投入工时（小时）。
+  hours Decimal @default(0) @db.Decimal(6, 1)
+
+  /// 本次报工后的任务进度快照。
+  progress Int
+
+  note String?
+
+  reporterId String? @map("reporter_id")
+  reporter   User?   @relation("WorkReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([taskId, createdAt])
+  @@index([reporterId, createdAt])
+  @@map("prod_work_report")
+}
+
+/// 现场异常单（业务方案 §9.6）。编号 EX-YYYYMMDD-XXX。
+/// 流转：OPEN →（指派）HANDLING →（责任人处理）RESOLVED →（确认）CLOSED，
+/// 复检不通过可退回 HANDLING。区别于 M8 质量问题单：这是装配现场的执行异常。
+model WorkException {
+  id   String @id @default(cuid())
+  code String @unique
+
+  projectId String  @map("project_id")
+  project   Project @relation("ExceptionProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// 关联工单/任务可选（也允许与具体任务无关的现场异常）。删除工单不删异常记录。
+  workOrderId String?    @map("work_order_id")
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  taskId String?       @map("task_id")
+  task   AssemblyTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  /// 涉及物料编码（可选），供后续质量追溯反查。
+  materialCode String? @map("material_code")
+
+  title       String
+  description String?
+
+  /// ExceptionStatus。
+  status String @default("OPEN")
+
+  reporterId String? @map("reporter_id")
+  reporter   User?   @relation("ExceptionReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  /// 责任人。指派后进入 HANDLING。
+  handlerId String? @map("handler_id")
+  handler   User?   @relation("ExceptionHandler", fields: [handlerId], references: [id], onDelete: SetNull)
+
+  /// 处理说明（责任人填写；关闭/退回意见追加于此）。
+  handleNote String?   @map("handle_note")
+  resolvedAt DateTime? @map("resolved_at")
+
+  closedById String?   @map("closed_by_id")
+  closedBy   User?     @relation("ExceptionCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt   DateTime? @map("closed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId, status])
+  @@index([handlerId, status])
+  @@index([reporterId])
+  @@map("prod_exception")
+}
+
+/// 通用附件索引（M7 起）。文件本体在对象存储，与图纸同一套 StorageService；
+/// 按 targetType+targetId 挂到业务对象上。M7 用于异常单现场照片，
+/// M8 检验单、M9 调试记录可直接复用，不再各建附件表。
+model Attachment {
+  id String @id @default(cuid())
+
+  /// 业务对象类型：EXCEPTION（M7）/ INSPECTION、DEBUG…（后续里程碑）。
+  targetType String @map("target_type")
+  targetId   String @map("target_id")
+
+  storageKey String @map("storage_key")
+  fileName   String @map("file_name")
+  fileSize   Int    @map("file_size")
+  mimeType   String @map("mime_type")
+
+  uploadedById String? @map("uploaded_by_id")
+  uploadedBy   User?   @relation("AttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([targetType, targetId])
+  @@map("sys_attachment")
 }

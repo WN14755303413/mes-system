@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, HttpStatus, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ErrorCode, type Permission } from '@mes/shared';
-import { PERMISSIONS_KEY } from '../decorators/auth.decorators';
+import { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from '../decorators/auth.decorators';
 import { AppException } from '../exceptions/app.exception';
 import type { AuthenticatedRequest } from './jwt-auth.guard';
 
@@ -20,8 +20,12 @@ export class PermissionsGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const requiredAny = this.reflector.getAllAndOverride<Permission[]>(ANY_PERMISSIONS_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
-    if (!required?.length) return true;
+    if (!required?.length && !requiredAny?.length) return true;
 
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = req.user;
@@ -32,7 +36,10 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const granted = new Set(user.permissions);
-    if (!required.every((p) => granted.has(p))) {
+    if (required?.length && !required.every((p) => granted.has(p))) {
+      throw new AppException(ErrorCode.FORBIDDEN, '没有操作权限', HttpStatus.FORBIDDEN);
+    }
+    if (requiredAny?.length && !requiredAny.some((p) => granted.has(p))) {
       throw new AppException(ErrorCode.FORBIDDEN, '没有操作权限', HttpStatus.FORBIDDEN);
     }
 

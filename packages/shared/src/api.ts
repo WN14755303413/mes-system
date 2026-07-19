@@ -1,8 +1,11 @@
 import type { DataScope, UserStatus } from './enums';
 import type {
   ArrivalType,
+  AssemblyTaskStatus,
   BomStatus,
+  CraftType,
   DrawingStatus,
+  ExceptionStatus,
   IssuePriority,
   IssueStatus,
   KittingRowStatus,
@@ -13,6 +16,7 @@ import type {
   RiskStatus,
   SyncSource,
   TaskStatus,
+  WorkReportType,
 } from './enums';
 import type { Permission } from './permissions';
 
@@ -907,6 +911,282 @@ export interface KittingOverviewItem {
   kitRate: number;
   shortageRows: number;
   longLeadAlerts: number;
+}
+
+// ============================================================
+//  M7 生产执行：装配工单 / 任务派工 / 现场报工 / 异常单
+//
+//  一期不建独立「生产计划」实体（§8.4 设计原则：不做复杂 APS）——
+//  工单即计划单元（计划/实际日期在工单上），任务即工序计划。
+//  报工回写链路：报工 → 任务进度 → 工单进度 →（可选关联的）WBS 任务进度，
+//  最终体现在 M4 甘特图与项目台账上。
+// ============================================================
+
+// ---- 装配工单 ----
+
+/** 装配工单行。status 走通用 RecordStatus 状态机（草稿→下达→执行中→…）。 */
+export interface WorkOrderRow {
+  id: string;
+  /** WO-YYYYMMDD-XXX */
+  code: string;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  name: string;
+  craft: CraftType;
+  status: string; // RecordStatus
+  planStartAt: string | null;
+  planEndAt: string | null;
+  actualStartAt: string | null;
+  actualEndAt: string | null;
+  /** 0-100，由任务按标准工时加权汇总，报工时自动重算。 */
+  progress: number;
+  taskCount: number;
+  doneTaskCount: number;
+  /** 未派工任务数，派工页/计划页红点提示。 */
+  unassignedCount: number;
+  totalStandardHours: number;
+  totalActualHours: number;
+  /** 关联的项目 WBS 任务；报工进度回写到它（甘特图联动）。 */
+  wbsTaskId: string | null;
+  wbsTaskName: string | null;
+  /** 计划完工日已过而未完工。 */
+  delayed: boolean;
+  remark: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface WorkOrderListQuery {
+  projectId?: string;
+  status?: string;
+  craft?: CraftType;
+  keyword?: string;
+  delayedOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateWorkOrderRequest {
+  projectId: string;
+  name: string;
+  craft: CraftType;
+  planStartAt?: string | null;
+  planEndAt?: string | null;
+  wbsTaskId?: string | null;
+  remark?: string | null;
+}
+
+/** 计划调整（§8.4）。craft 仅草稿可改；已进入执行的工单只允许调整计划日期等。 */
+export interface UpdateWorkOrderRequest {
+  name?: string;
+  craft?: CraftType;
+  planStartAt?: string | null;
+  planEndAt?: string | null;
+  wbsTaskId?: string | null;
+  remark?: string | null;
+}
+
+/** 工单状态流转（通用 RecordStatus 状态机，后端校验合法跃迁）。 */
+export interface ChangeWorkOrderStatusRequest {
+  status: string;
+}
+
+export interface WorkOrderDetail extends WorkOrderRow {
+  tasks: AssemblyTaskRow[];
+}
+
+/** 生产计划页顶部的项目维度汇总（计划 vs 实际、延期预警）。 */
+export interface ProductionOverviewItem {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  /** 项目计划交期，来自项目台账。 */
+  projectPlanEndAt: string | null;
+  workOrderCount: number;
+  completedCount: number;
+  inProgressCount: number;
+  delayedCount: number;
+  unassignedCount: number;
+  /** 各工单进度按标准工时加权的平均值（0-100）。 */
+  avgProgress: number;
+  openExceptionCount: number;
+}
+
+// ---- 装配任务 ----
+
+export interface AssemblyTaskRow {
+  id: string;
+  workOrderId: string;
+  seq: number;
+  name: string;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  status: AssemblyTaskStatus;
+  planStartAt: string | null;
+  planEndAt: string | null;
+  actualStartAt: string | null;
+  actualEndAt: string | null;
+  standardHours: number | null;
+  /** 累计实际工时，由报工累加。 */
+  actualHours: number;
+  progress: number;
+  drawingId: string | null;
+  drawingCode: string | null;
+  drawingName: string | null;
+  /** 作业要求/指导说明（一期文本；完整作业指导书属工艺模块）。 */
+  requirement: string | null;
+  remark: string | null;
+}
+
+export interface SaveAssemblyTaskRequest {
+  name: string;
+  planStartAt?: string | null;
+  planEndAt?: string | null;
+  standardHours?: number | null;
+  drawingId?: string | null;
+  requirement?: string | null;
+  remark?: string | null;
+}
+
+/** 派工/改派。assigneeId 传 null 表示取消派工（仅待开工任务可取消）。 */
+export interface AssignTaskRequest {
+  assigneeId: string | null;
+}
+
+/** 带工单与项目上下文的任务行——派工页与「我的任务」页共用。 */
+export interface TaskWithContextRow extends AssemblyTaskRow {
+  workOrderCode: string;
+  workOrderName: string;
+  workOrderStatus: string;
+  craft: CraftType;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+}
+
+export interface DispatchTaskQuery {
+  projectId?: string;
+  workOrderId?: string;
+  status?: AssemblyTaskStatus;
+  assigneeId?: string;
+  unassignedOnly?: boolean;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+// ---- 现场报工 ----
+
+export interface MyTaskQuery {
+  /** 不传 = 全部未完工任务；COMPLETED = 历史已完工。 */
+  status?: AssemblyTaskStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface WorkReportRow {
+  id: string;
+  taskId: string;
+  type: WorkReportType;
+  hours: number;
+  /** 本次报工后的任务进度。 */
+  progress: number;
+  note: string | null;
+  reporterName: string | null;
+  createdAt: string;
+}
+
+export interface MyTaskDetail {
+  task: TaskWithContextRow;
+  reports: WorkReportRow[];
+}
+
+/**
+ * 报工。动作合法性由 REPORT_ACTION_RULES 决定；
+ * hours 为本次投入工时（开工/恢复默认 0），progress 为动作后的完成度
+ * （COMPLETE 强制 100，REWORK 缺省归 0）。
+ */
+export interface CreateWorkReportRequest {
+  type: WorkReportType;
+  hours?: number;
+  progress?: number;
+  note?: string | null;
+}
+
+// ---- 异常单 ----
+
+export interface ExceptionRow {
+  id: string;
+  /** EX-YYYYMMDD-XXX */
+  code: string;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  workOrderId: string | null;
+  workOrderCode: string | null;
+  taskId: string | null;
+  taskName: string | null;
+  materialCode: string | null;
+  title: string;
+  description: string | null;
+  status: ExceptionStatus;
+  reporterId: string | null;
+  reporterName: string | null;
+  handlerId: string | null;
+  handlerName: string | null;
+  handleNote: string | null;
+  resolvedAt: string | null;
+  closedByName: string | null;
+  closedAt: string | null;
+  photoCount: number;
+  createdAt: string;
+}
+
+export interface ExceptionListQuery {
+  projectId?: string;
+  status?: ExceptionStatus;
+  /** 只看我提交或我负责的（无 plan:read 权限时后端强制生效）。 */
+  onlyMine?: boolean;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** 提交异常（§9.6：选择项目/设备/工序/物料 + 照片说明）。带 taskId 时项目与工单自动带出。 */
+export interface CreateExceptionRequest {
+  projectId?: string;
+  workOrderId?: string | null;
+  taskId?: string | null;
+  materialCode?: string | null;
+  title: string;
+  description?: string | null;
+}
+
+export interface AssignExceptionRequest {
+  handlerId: string;
+}
+
+export interface ResolveExceptionRequest {
+  handleNote: string;
+}
+
+/** 关闭（确认通过）或退回（复检不通过 → 处理中）。note 追加到处理记录。 */
+export interface CloseExceptionRequest {
+  note?: string | null;
+}
+
+export interface AttachmentItem {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedByName: string | null;
+  createdAt: string;
+}
+
+export interface ExceptionDetail extends ExceptionRow {
+  photos: AttachmentItem[];
 }
 
 /**

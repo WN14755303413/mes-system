@@ -32,6 +32,12 @@ import MaterialPage from '@/pages/material/list/MaterialPage';
 import SupplyPage from '@/pages/material/supply/SupplyPage';
 import KittingPage from '@/pages/material/kitting/KittingPage';
 
+// M7 生产执行：生产计划 / 装配派工 / 现场报工 / 异常上报
+import PlanPage from '@/pages/production/plan/PlanPage';
+import DispatchPage from '@/pages/production/dispatch/DispatchPage';
+import MyTasksPage from '@/pages/production/report/MyTasksPage';
+import ExceptionPage from '@/pages/production/exception/ExceptionPage';
+
 /** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
 const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/user': <UserListPage />,
@@ -48,6 +54,10 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/material/list': <MaterialPage />,
   '/material/supply': <SupplyPage />,
   '/material/kitting': <KittingPage />,
+  '/production/plan': <PlanPage />,
+  '/production/dispatch': <DispatchPage />,
+  '/production/report': <MyTasksPage />,
+  '/production/exception': <ExceptionPage />,
 };
 
 function FullscreenSpin() {

@@ -317,3 +317,105 @@ export const KITTING_ROW_STATUS_LABEL: Record<KittingRowStatus, string> = {
   IN_TRANSIT: '在途覆盖',
   SHORTAGE: '缺料',
 };
+
+// ============================================================
+//  生产执行域枚举（M7）
+// ============================================================
+
+/** 装配专业（业务方案 §9.5「按机械、电气、管路等专业生成任务」）。 */
+export const CraftType = {
+  MECH: 'MECH', // 机械装配
+  ELEC: 'ELEC', // 电气装配
+  PIPE: 'PIPE', // 管路装配
+  OTHER: 'OTHER', // 其它（软件预装、包装等）
+} as const;
+export type CraftType = (typeof CraftType)[keyof typeof CraftType];
+
+export const CRAFT_TYPE_LABEL: Record<CraftType, string> = {
+  MECH: '机械装配',
+  ELEC: '电气装配',
+  PIPE: '管路装配',
+  OTHER: '其它',
+};
+
+/**
+ * 装配任务状态。任务不走通用状态机——它的状态只由「报工动作」驱动
+ * （见 REPORT_ACTION_RULES），装配工不能任意指定目标状态。
+ */
+export const AssemblyTaskStatus = {
+  PENDING: 'PENDING', // 待开工（含未派工）
+  IN_PROGRESS: 'IN_PROGRESS', // 进行中
+  PAUSED: 'PAUSED', // 暂停
+  COMPLETED: 'COMPLETED', // 已完工
+} as const;
+export type AssemblyTaskStatus = (typeof AssemblyTaskStatus)[keyof typeof AssemblyTaskStatus];
+
+export const ASSEMBLY_TASK_STATUS_LABEL: Record<AssemblyTaskStatus, string> = {
+  PENDING: '待开工',
+  IN_PROGRESS: '进行中',
+  PAUSED: '暂停',
+  COMPLETED: '已完工',
+};
+
+/** 报工动作。一次报工 = 一个动作 + 本次工时 + 完成进度 + 备注。 */
+export const WorkReportType = {
+  START: 'START', // 开工
+  PROGRESS: 'PROGRESS', // 报进度（中途）
+  PAUSE: 'PAUSE', // 暂停
+  RESUME: 'RESUME', // 恢复
+  COMPLETE: 'COMPLETE', // 完工
+  REWORK: 'REWORK', // 返工重开（业务方案 §8.5 返工返修）
+} as const;
+export type WorkReportType = (typeof WorkReportType)[keyof typeof WorkReportType];
+
+export const WORK_REPORT_TYPE_LABEL: Record<WorkReportType, string> = {
+  START: '开工',
+  PROGRESS: '报进度',
+  PAUSE: '暂停',
+  RESUME: '恢复',
+  COMPLETE: '完工',
+  REWORK: '返工',
+};
+
+/**
+ * 报工动作规则：动作允许的起始状态 → 动作后的任务状态。
+ * 前端据此渲染可用动作按钮，后端据此强校验——两端共享同一张表。
+ */
+export const REPORT_ACTION_RULES: Record<
+  WorkReportType,
+  { from: readonly AssemblyTaskStatus[]; to: AssemblyTaskStatus }
+> = {
+  START: { from: ['PENDING'], to: 'IN_PROGRESS' },
+  PROGRESS: { from: ['IN_PROGRESS'], to: 'IN_PROGRESS' },
+  PAUSE: { from: ['IN_PROGRESS'], to: 'PAUSED' },
+  RESUME: { from: ['PAUSED'], to: 'IN_PROGRESS' },
+  COMPLETE: { from: ['IN_PROGRESS'], to: 'COMPLETED' },
+  REWORK: { from: ['COMPLETED'], to: 'IN_PROGRESS' },
+};
+
+/**
+ * 现场异常单状态（业务方案 §9.6 装配异常到问题闭环）。
+ * 流转：待处理 →（指派）处理中 →（责任人处理）已处理 →（计划/项目经理确认）已关闭。
+ * 复检不通过可从已处理退回处理中；误报可在任意未关闭状态直接关闭。
+ */
+export const ExceptionStatus = {
+  OPEN: 'OPEN', // 待处理（未指派责任人）
+  HANDLING: 'HANDLING', // 处理中
+  RESOLVED: 'RESOLVED', // 已处理，待确认
+  CLOSED: 'CLOSED', // 已关闭
+} as const;
+export type ExceptionStatus = (typeof ExceptionStatus)[keyof typeof ExceptionStatus];
+
+export const EXCEPTION_STATUS_LABEL: Record<ExceptionStatus, string> = {
+  OPEN: '待处理',
+  HANDLING: '处理中',
+  RESOLVED: '已处理',
+  CLOSED: '已关闭',
+};
+
+export const EXCEPTION_STATUS_TRANSITIONS: Record<ExceptionStatus, ExceptionStatus[]> = {
+  OPEN: ['HANDLING', 'CLOSED'],
+  HANDLING: ['RESOLVED', 'CLOSED'],
+  RESOLVED: ['CLOSED', 'HANDLING'],
+  CLOSED: [],
+};

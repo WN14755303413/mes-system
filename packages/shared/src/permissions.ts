@@ -247,15 +247,18 @@ export const ROLE_PRESET: Record<
     dataScope: 'DEPT_AND_BELOW',
   },
 
-  // 装配工只看得到派给自己的任务，以及任务关联的图纸与工艺
+  // 装配工只看得到派给自己的任务，以及任务关联的图纸与工艺。
+  // drawing:download 是「查看图纸内容」的必要权限（下载/预览同一接口，均留审计）——
+  // 现场按图作业是刚需（业务方案 §7.9），单独的 download 权限点是为了强制审计，不是为了拦住现场。
   ASSEMBLER: {
-    permissions: ['drawing:read', 'task:report', 'task:exception'],
+    permissions: ['drawing:read', 'drawing:download', 'task:report', 'task:exception'],
     dataScope: 'SELF_ONLY',
   },
 
   COMMISSIONER: {
     permissions: [
       'drawing:read',
+      'drawing:download',
       'debug:read',
       'debug:write',
       'task:report',
