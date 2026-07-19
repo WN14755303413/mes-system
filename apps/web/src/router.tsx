@@ -38,6 +38,10 @@ import DispatchPage from '@/pages/production/dispatch/DispatchPage';
 import MyTasksPage from '@/pages/production/report/MyTasksPage';
 import ExceptionPage from '@/pages/production/exception/ExceptionPage';
 
+// M8 质量管理：检验单 / 质量问题闭环
+import InspectionPage from '@/pages/quality/inspection/InspectionPage';
+import IssuePage from '@/pages/quality/issue/IssuePage';
+
 /** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
 const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/user': <UserListPage />,
@@ -58,6 +62,8 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/production/dispatch': <DispatchPage />,
   '/production/report': <MyTasksPage />,
   '/production/exception': <ExceptionPage />,
+  '/quality/inspection': <InspectionPage />,
+  '/quality/issue': <IssuePage />,
 };
 
 function FullscreenSpin() {

@@ -16,6 +16,7 @@ import { HealthModule } from './modules/health/health.module';
 import { MaterialModule } from './modules/material/material.module';
 import { ProductionModule } from './modules/production/production.module';
 import { ProjectModule } from './modules/project/project.module';
+import { QualityModule } from './modules/quality/quality.module';
 import { SystemModule } from './modules/system/system.module';
 import { validateEnv } from './config/env';
 
@@ -40,6 +41,7 @@ import { validateEnv } from './config/env';
     BomModule,
     MaterialModule,
     ProductionModule,
+    QualityModule,
   ],
   providers: [
     // 顺序即执行顺序，逐层收窄：

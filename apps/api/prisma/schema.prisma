@@ -102,6 +102,14 @@ model User {
   closedExceptions   WorkException[] @relation("ExceptionCloser")
   uploadedFiles      Attachment[]    @relation("AttachmentUploader")
 
+  // 质量管理域反向关系（M8）
+  inspections           Inspection[]         @relation("InspectionInspector")
+  judgedInspections     Inspection[]         @relation("InspectionJudge")
+  reportedQualityIssues QualityIssue[]       @relation("QualityIssueReporter")
+  handledQualityIssues  QualityIssue[]       @relation("QualityIssueHandler")
+  closedQualityIssues   QualityIssue[]       @relation("QualityIssueCloser")
+  qualityIssueActions   QualityIssueAction[] @relation("QualityIssueOperator")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -374,6 +382,10 @@ model Project {
   // 生产执行域反向关系（M7）
   workOrders     WorkOrder[]     @relation("WorkOrderProject")
   prodExceptions WorkException[] @relation("ExceptionProject")
+
+  // 质量管理域反向关系（M8）
+  inspections   Inspection[]   @relation("InspectionProject")
+  qualityIssues QualityIssue[] @relation("QualityIssueProject")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -708,6 +720,8 @@ model Arrival {
   syncedAt   DateTime @default(now()) @map("synced_at")
   remark     String?
 
+  inspections Inspection[] @relation("InspectionArrival")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -856,6 +870,8 @@ model WorkOrder {
 
   tasks      AssemblyTask[]
   exceptions WorkException[]
+  inspections   Inspection[]   @relation("InspectionWorkOrder")
+  qualityIssues QualityIssue[] @relation("QualityIssueWorkOrder")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -904,6 +920,8 @@ model AssemblyTask {
 
   reports    WorkReport[]
   exceptions WorkException[]
+  inspections   Inspection[]   @relation("InspectionTask")
+  qualityIssues QualityIssue[] @relation("QualityIssueTask")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1013,4 +1031,188 @@ model Attachment {
 
   @@index([targetType, targetId])
   @@map("sys_attachment")
+}
+
+// ============================================================
+//  质量管理域（M8，业务方案 §8.7 / §9.7）
+// ============================================================
+
+/// 检验单（M8）。编号 QC-YYYYMMDD-XXX（§10.2 的示例前缀）。
+/// 生命周期：PENDING 待检（单头明细可编辑）→ judge → PASSED/REJECTED 终态（锁定），
+/// PENDING 可作废。复检不新开检验单——复检是质量问题单上的动作（§9.7）。
+/// 关联维度按类型必填（shared INSPECTION_TYPE_META，前后端同表）：
+/// IQC→物料，IPQC/ASSY→工单（项目反查），FQC/DEBUG→项目。
+/// 一期无设备实体（M9 一机一档），FQC 用 batchNo/备注记设备号，届时补可空外键。
+model Inspection {
+  id   String @id @default(cuid())
+  code String @unique
+
+  /// InspectionType：IQC/IPQC/ASSY/FQC/DEBUG。
+  type String
+
+  /// InspectionStatus。判定即终态，不走通用状态机。
+  status String @default("PENDING")
+
+  /// IQC 检通用物料时可无项目。
+  projectId String?  @map("project_id")
+  project   Project? @relation("InspectionProject", fields: [projectId], references: [id], onDelete: SetNull)
+
+  workOrderId String?    @map("work_order_id")
+  workOrder   WorkOrder? @relation("InspectionWorkOrder", fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  taskId String?       @map("task_id")
+  task   AssemblyTask? @relation("InspectionTask", fields: [taskId], references: [id], onDelete: SetNull)
+
+  /// IQC 可选关联到货记录（供「到货 → 检验」追溯）。
+  arrivalId String?  @map("arrival_id")
+  arrival   Arrival? @relation("InspectionArrival", fields: [arrivalId], references: [id], onDelete: SetNull)
+
+  materialCode String? @map("material_code")
+  /// 批次/序列号（§8.7 追溯对象）。FQC 一期也用它记设备号。
+  batchNo      String? @map("batch_no")
+  /// 供应商名快照（IQC 追溯）。ERP 供应商主数据接入后可改外键。
+  supplierName String? @map("supplier_name")
+
+  /// 检验对象说明，如「气动阀门 XX 型来料检验」。
+  title String
+
+  /// 检验员（默认创建人，可指定他人）。
+  inspectorId String? @map("inspector_id")
+  inspector   User?   @relation("InspectionInspector", fields: [inspectorId], references: [id], onDelete: SetNull)
+
+  judgedById String?   @map("judged_by_id")
+  judgedBy   User?     @relation("InspectionJudge", fields: [judgedById], references: [id], onDelete: SetNull)
+  judgedAt   DateTime? @map("judged_at")
+
+  remark String?
+
+  items  InspectionItem[]
+  issues QualityIssue[]   @relation("IssueInspection")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([type, status])
+  @@index([projectId, status])
+  @@index([workOrderId])
+  @@index([materialCode])
+  @@map("qc_inspection")
+}
+
+/// 检验项明细行。判定后随单锁定；passed=false 的行是问题单描述的自动来源。
+model InspectionItem {
+  id           String     @id @default(cuid())
+  inspectionId String     @map("inspection_id")
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  /// 单内行号，展示排序用。
+  seq Int
+
+  /// 检验项目，如「外观」「尺寸 φ50±0.02」。
+  name String
+  /// 标准要求。
+  standard String?
+  /// 实测值/实况记录。
+  actual String?
+  /// 单项判定；null=未判定。
+  passed Boolean?
+  remark String?
+
+  @@index([inspectionId])
+  @@map("qc_inspection_item")
+}
+
+/// 质量问题单（M8，§9.7 检验到整改闭环 + 8D 结构化字段）。编号 QI-YYYYMMDD-XXX。
+/// 流转：OPEN →（分派）HANDLING →（提交整改）RECHECKING →（复检通过）CLOSED，
+/// 复检不通过退回 HANDLING；未关闭前可 VOIDED（误报，区别于正常关闭）。
+/// 动作规则唯一依据 shared ISSUE_ACTION_RULES（前后端同表）。
+/// 区别于 M7 prod_exception：那是装配现场执行异常，这是检验驱动的正式质量闭环。
+model QualityIssue {
+  id   String @id @default(cuid())
+  code String @unique
+
+  /// IssueSource：INSPECTION 检验不合格自动生成 / MANUAL 手动发起。
+  source String @default("MANUAL")
+
+  inspectionId String?     @map("inspection_id")
+  inspection   Inspection? @relation("IssueInspection", fields: [inspectionId], references: [id], onDelete: SetNull)
+
+  /// QualityIssueStatus。
+  status String @default("OPEN")
+
+  /// IssueSeverity：LOW/MEDIUM/HIGH/CRITICAL。独立于项目风险等级。
+  severity String @default("MEDIUM")
+
+  projectId String?  @map("project_id")
+  project   Project? @relation("QualityIssueProject", fields: [projectId], references: [id], onDelete: SetNull)
+
+  workOrderId String?    @map("work_order_id")
+  workOrder   WorkOrder? @relation("QualityIssueWorkOrder", fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  taskId String?       @map("task_id")
+  task   AssemblyTask? @relation("QualityIssueTask", fields: [taskId], references: [id], onDelete: SetNull)
+
+  materialCode String? @map("material_code")
+  batchNo      String? @map("batch_no")
+  supplierName String? @map("supplier_name")
+
+  title       String
+  description String?
+
+  // ---- 8D 结构化字段：主表存最新值，每轮流转历史见动作日志 ----
+
+  /// D3 遏制措施（临时围堵，防止不良流出）。
+  containmentAction String? @map("containment_action")
+  /// D4 根因分析。
+  rootCause String? @map("root_cause")
+  /// D5/D6 纠正措施及实施。
+  correctiveAction String? @map("corrective_action")
+  /// D7 预防措施（防再发，横向展开）。
+  preventiveAction String? @map("preventive_action")
+  /// DispositionType：不合格品处置（返工/返修/让步接收/退货/报废）。
+  disposition String?
+
+  reporterId String? @map("reporter_id")
+  reporter   User?   @relation("QualityIssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  /// 责任人。分派后进入 HANDLING；提交整改仅限本人（或有 quality:issue:write 者代提）。
+  handlerId String? @map("handler_id")
+  handler   User?   @relation("QualityIssueHandler", fields: [handlerId], references: [id], onDelete: SetNull)
+
+  closedById String?   @map("closed_by_id")
+  closedBy   User?     @relation("QualityIssueCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt   DateTime? @map("closed_at")
+
+  actions QualityIssueAction[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, severity])
+  @@index([projectId, status])
+  @@index([handlerId, status])
+  @@index([reporterId])
+  @@index([inspectionId])
+  @@map("qc_issue")
+}
+
+/// 问题单动作日志。只增不改不删——每轮分派/整改/复检/退回都是独立记录，
+/// 8D 多轮整改历史由此完整可查（区别于 M7 异常单的文本前缀追加）。
+model QualityIssueAction {
+  id      String       @id @default(cuid())
+  issueId String       @map("issue_id")
+  issue   QualityIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  /// QualityIssueActionType：CREATE/ASSIGN/SUBMIT/RECHECK_PASS/RECHECK_FAIL/VOID。
+  type String
+
+  note String?
+
+  operatorId String? @map("operator_id")
+  operator   User?   @relation("QualityIssueOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([issueId, createdAt])
+  @@map("qc_issue_action")
 }

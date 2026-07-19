@@ -419,3 +419,168 @@ export const EXCEPTION_STATUS_TRANSITIONS: Record<ExceptionStatus, ExceptionStat
   RESOLVED: ['CLOSED', 'HANDLING'],
   CLOSED: [],
 };
+
+// ============================================================
+//  质量管理域枚举（M8）
+// ============================================================
+
+/**
+ * 检验类型（业务方案 §8.7 五类检验）。
+ * DEBUG 一期仅作分类占位——调试记录实体在 M9，届时再做单据级联动。
+ */
+export const InspectionType = {
+  IQC: 'IQC', // 来料检验
+  IPQC: 'IPQC', // 过程检验
+  ASSY: 'ASSY', // 装配检验
+  FQC: 'FQC', // 出厂检验
+  DEBUG: 'DEBUG', // 调试检验（M9 联动）
+} as const;
+export type InspectionType = (typeof InspectionType)[keyof typeof InspectionType];
+
+export const INSPECTION_TYPE_LABEL: Record<InspectionType, string> = {
+  IQC: '来料检验',
+  IPQC: '过程检验',
+  ASSY: '装配检验',
+  FQC: '出厂检验',
+  DEBUG: '调试检验',
+};
+
+/**
+ * 各检验类型的必填关联维度。前端据此动态渲染必填项，后端同表校验——
+ * 两端共享一张表（同 REPORT_ACTION_RULES 的哲学）。
+ * IPQC/ASSY 关联工单后项目由后端反查，前端无需再传。
+ */
+export const INSPECTION_TYPE_META: Record<
+  InspectionType,
+  { requires: readonly ('projectId' | 'workOrderId' | 'materialCode')[] }
+> = {
+  IQC: { requires: ['materialCode'] },
+  IPQC: { requires: ['workOrderId'] },
+  ASSY: { requires: ['workOrderId'] },
+  FQC: { requires: ['projectId'] },
+  DEBUG: { requires: ['projectId'] },
+};
+
+/**
+ * 检验单状态。生命周期极简：待检（可编辑）→ 判定即终态（锁定）。
+ * 复检不新开检验单——复检是质量问题单上的动作（§9.7），避免单据爆炸。
+ */
+export const InspectionStatus = {
+  PENDING: 'PENDING', // 待检（单头与明细可编辑）
+  PASSED: 'PASSED', // 判定合格（终态）
+  REJECTED: 'REJECTED', // 判定不合格（终态，自动生成质量问题单）
+  VOIDED: 'VOIDED', // 已作废
+} as const;
+export type InspectionStatus = (typeof InspectionStatus)[keyof typeof InspectionStatus];
+
+export const INSPECTION_STATUS_LABEL: Record<InspectionStatus, string> = {
+  PENDING: '待检',
+  PASSED: '合格',
+  REJECTED: '不合格',
+  VOIDED: '已作废',
+};
+
+/** 质量问题单来源。检验不合格强制自动生成（§9.7），也允许有权者手动发起。 */
+export const IssueSource = {
+  INSPECTION: 'INSPECTION', // 检验不合格自动生成
+  MANUAL: 'MANUAL', // 手动发起
+} as const;
+export type IssueSource = (typeof IssueSource)[keyof typeof IssueSource];
+
+export const ISSUE_SOURCE_LABEL: Record<IssueSource, string> = {
+  INSPECTION: '检验生成',
+  MANUAL: '手动发起',
+};
+
+/** 问题严重度。独立于项目风险 RiskLevel——语义不同，避免跨域耦合。 */
+export const IssueSeverity = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL',
+} as const;
+export type IssueSeverity = (typeof IssueSeverity)[keyof typeof IssueSeverity];
+
+export const ISSUE_SEVERITY_LABEL: Record<IssueSeverity, string> = {
+  LOW: '轻微',
+  MEDIUM: '一般',
+  HIGH: '严重',
+  CRITICAL: '致命',
+};
+
+/** 不合格品处置方式（业务方案 §8.7 不合格品管理）。 */
+export const DispositionType = {
+  REWORK: 'REWORK', // 返工
+  REPAIR: 'REPAIR', // 返修
+  CONCESSION: 'CONCESSION', // 让步接收
+  RETURN_GOODS: 'RETURN_GOODS', // 退货
+  SCRAP: 'SCRAP', // 报废
+} as const;
+export type DispositionType = (typeof DispositionType)[keyof typeof DispositionType];
+
+export const DISPOSITION_TYPE_LABEL: Record<DispositionType, string> = {
+  REWORK: '返工',
+  REPAIR: '返修',
+  CONCESSION: '让步接收',
+  RETURN_GOODS: '退货',
+  SCRAP: '报废',
+};
+
+/**
+ * 质量问题单状态（§9.7 检验到整改闭环）。
+ * 流转：待分派 →（分派）整改中 →（提交整改）待复检 →（复检通过）已关闭；
+ * 复检不通过退回整改中；未关闭前可作废（误报，区别于正常关闭）。
+ */
+export const QualityIssueStatus = {
+  OPEN: 'OPEN', // 待分派
+  HANDLING: 'HANDLING', // 整改中
+  RECHECKING: 'RECHECKING', // 待复检
+  CLOSED: 'CLOSED', // 已关闭（复检通过）
+  VOIDED: 'VOIDED', // 已作废（误报）
+} as const;
+export type QualityIssueStatus = (typeof QualityIssueStatus)[keyof typeof QualityIssueStatus];
+
+export const QUALITY_ISSUE_STATUS_LABEL: Record<QualityIssueStatus, string> = {
+  OPEN: '待分派',
+  HANDLING: '整改中',
+  RECHECKING: '待复检',
+  CLOSED: '已关闭',
+  VOIDED: '已作废',
+};
+
+/** 问题单动作类型。动作日志只增不改，完整时间线含创建。 */
+export const QualityIssueActionType = {
+  CREATE: 'CREATE', // 创建（含检验自动生成）
+  ASSIGN: 'ASSIGN', // 分派/改派责任人
+  SUBMIT: 'SUBMIT', // 责任人提交整改
+  RECHECK_PASS: 'RECHECK_PASS', // 复检通过（即关闭）
+  RECHECK_FAIL: 'RECHECK_FAIL', // 复检不通过（退回整改）
+  VOID: 'VOID', // 作废
+} as const;
+export type QualityIssueActionType =
+  (typeof QualityIssueActionType)[keyof typeof QualityIssueActionType];
+
+export const QUALITY_ISSUE_ACTION_LABEL: Record<QualityIssueActionType, string> = {
+  CREATE: '创建',
+  ASSIGN: '分派',
+  SUBMIT: '提交整改',
+  RECHECK_PASS: '复检通过',
+  RECHECK_FAIL: '复检退回',
+  VOID: '作废',
+};
+
+/**
+ * 问题单动作规则：动作允许的起始状态 → 动作后的状态。
+ * 前端据此渲染可用动作按钮，后端据此强校验——两端共享同一张表
+ * （同 M7 REPORT_ACTION_RULES）。CREATE 不在表内：它产生初始态而非流转。
+ */
+export const ISSUE_ACTION_RULES: Record<
+  Exclude<QualityIssueActionType, 'CREATE'>,
+  { from: readonly QualityIssueStatus[]; to: QualityIssueStatus }
+> = {
+  ASSIGN: { from: ['OPEN', 'HANDLING'], to: 'HANDLING' }, // 改派保持整改中
+  SUBMIT: { from: ['HANDLING'], to: 'RECHECKING' },
+  RECHECK_PASS: { from: ['RECHECKING'], to: 'CLOSED' },
+  RECHECK_FAIL: { from: ['RECHECKING'], to: 'HANDLING' },
+  VOID: { from: ['OPEN', 'HANDLING', 'RECHECKING'], to: 'VOIDED' },
+};

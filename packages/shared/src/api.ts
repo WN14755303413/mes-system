@@ -4,12 +4,19 @@ import type {
   AssemblyTaskStatus,
   BomStatus,
   CraftType,
+  DispositionType,
   DrawingStatus,
   ExceptionStatus,
+  InspectionStatus,
+  InspectionType,
   IssuePriority,
+  IssueSeverity,
+  IssueSource,
   IssueStatus,
   KittingRowStatus,
   PoStatus,
+  QualityIssueActionType,
+  QualityIssueStatus,
   RequisitionStatus,
   RequisitionType,
   RiskLevel,
@@ -1187,6 +1194,229 @@ export interface AttachmentItem {
 
 export interface ExceptionDetail extends ExceptionRow {
   photos: AttachmentItem[];
+}
+
+// ============================================================
+//  M8 质量管理：检验单 / 检验项明细 / 质量问题单 8D 闭环
+//
+//  检验单 = 单头 + 检验项明细行，判定即终态；不合格在同一事务内
+//  强制生成质量问题单（§9.7「不合格则生成质量问题单」）。
+//  问题单闭环：分派 → 整改 → 复检 →（通过）关闭 /（不通过）退回，
+//  每一步落独立动作日志（qc_issue_action），8D 字段在主表存最新值。
+// ============================================================
+
+// ---- 检验单 ----
+
+/** 检验项明细行（创建/编辑时提交）。passed 为 null 表示未判定。 */
+export interface InspectionItemInput {
+  name: string;
+  standard?: string | null;
+  actual?: string | null;
+  passed?: boolean | null;
+  remark?: string | null;
+}
+
+export interface InspectionItemRow extends InspectionItemInput {
+  id: string;
+  seq: number;
+}
+
+export interface InspectionRow {
+  id: string;
+  /** QC-YYYYMMDD-XXX */
+  code: string;
+  type: InspectionType;
+  status: InspectionStatus;
+  projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
+  workOrderId: string | null;
+  workOrderCode: string | null;
+  taskId: string | null;
+  taskName: string | null;
+  arrivalId: string | null;
+  materialCode: string | null;
+  batchNo: string | null;
+  supplierName: string | null;
+  title: string;
+  inspectorId: string | null;
+  inspectorName: string | null;
+  judgedByName: string | null;
+  judgedAt: string | null;
+  remark: string | null;
+  itemCount: number;
+  /** 不合格明细行数（判定后追溯用）。 */
+  failedItemCount: number;
+  photoCount: number;
+  createdAt: string;
+}
+
+export interface InspectionDetail extends InspectionRow {
+  items: InspectionItemRow[];
+  photos: AttachmentItem[];
+  /** 由本单不合格生成的质量问题单（追溯入口）。 */
+  issues: { id: string; code: string; status: QualityIssueStatus }[];
+}
+
+export interface InspectionListQuery {
+  type?: InspectionType;
+  status?: InspectionStatus;
+  projectId?: string;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** 创建检验单。必填关联维度由 INSPECTION_TYPE_META 决定；关联工单/任务时归属自动反查。 */
+export interface CreateInspectionRequest {
+  type: InspectionType;
+  title: string;
+  projectId?: string | null;
+  workOrderId?: string | null;
+  taskId?: string | null;
+  arrivalId?: string | null;
+  materialCode?: string | null;
+  batchNo?: string | null;
+  supplierName?: string | null;
+  remark?: string | null;
+  items?: InspectionItemInput[];
+}
+
+/** 编辑检验单（仅 PENDING）。items 全量替换。 */
+export interface UpdateInspectionRequest {
+  title?: string;
+  batchNo?: string | null;
+  supplierName?: string | null;
+  materialCode?: string | null;
+  remark?: string | null;
+  items?: InspectionItemInput[];
+}
+
+/** 判定。REJECTED 时后端在同一事务内生成质量问题单并返回其编号。 */
+export interface JudgeInspectionRequest {
+  result: 'PASSED' | 'REJECTED';
+  remark?: string | null;
+}
+
+export interface JudgeInspectionResult {
+  ok: true;
+  /** 不合格时自动生成的问题单。 */
+  issueId?: string;
+  issueCode?: string;
+}
+
+// ---- 质量问题单 ----
+
+export interface QualityIssueRow {
+  id: string;
+  /** QI-YYYYMMDD-XXX */
+  code: string;
+  source: IssueSource;
+  inspectionId: string | null;
+  inspectionCode: string | null;
+  status: QualityIssueStatus;
+  severity: IssueSeverity;
+  projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
+  workOrderId: string | null;
+  workOrderCode: string | null;
+  taskId: string | null;
+  taskName: string | null;
+  materialCode: string | null;
+  batchNo: string | null;
+  supplierName: string | null;
+  title: string;
+  description: string | null;
+  containmentAction: string | null;
+  rootCause: string | null;
+  correctiveAction: string | null;
+  preventiveAction: string | null;
+  disposition: DispositionType | null;
+  reporterId: string | null;
+  reporterName: string | null;
+  handlerId: string | null;
+  handlerName: string | null;
+  closedByName: string | null;
+  closedAt: string | null;
+  photoCount: number;
+  createdAt: string;
+}
+
+export interface QualityIssueActionItem {
+  id: string;
+  type: QualityIssueActionType;
+  note: string | null;
+  operatorName: string | null;
+  createdAt: string;
+}
+
+export interface QualityIssueDetail extends QualityIssueRow {
+  /** 动作时间线，按时间正序。 */
+  actions: QualityIssueActionItem[];
+  photos: AttachmentItem[];
+}
+
+export interface QualityIssueListQuery {
+  status?: QualityIssueStatus;
+  severity?: IssueSeverity;
+  source?: IssueSource;
+  projectId?: string;
+  /** 只看我发起或我负责的（无 quality:issue:read 权限时后端强制生效）。 */
+  onlyMine?: boolean;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** 手动发起问题单。关联工单/任务时归属自动反查。 */
+export interface CreateQualityIssueRequest {
+  title: string;
+  description?: string | null;
+  severity?: IssueSeverity;
+  projectId?: string | null;
+  workOrderId?: string | null;
+  taskId?: string | null;
+  materialCode?: string | null;
+  batchNo?: string | null;
+  supplierName?: string | null;
+}
+
+/** 编辑基础信息与 8D 字段（非终态；quality:issue:write 或责任人本人）。 */
+export interface UpdateQualityIssueRequest {
+  title?: string;
+  description?: string | null;
+  severity?: IssueSeverity;
+  containmentAction?: string | null;
+  rootCause?: string | null;
+  correctiveAction?: string | null;
+  preventiveAction?: string | null;
+  disposition?: DispositionType | null;
+}
+
+export interface AssignQualityIssueRequest {
+  handlerId: string;
+  note?: string | null;
+}
+
+/** 责任人提交整改：流转到待复检，可同时更新 8D 字段。 */
+export interface SubmitQualityIssueRequest {
+  note: string;
+  containmentAction?: string | null;
+  rootCause?: string | null;
+  correctiveAction?: string | null;
+  preventiveAction?: string | null;
+  disposition?: DispositionType | null;
+}
+
+/** 复检：通过即关闭，不通过退回整改中。 */
+export interface RecheckQualityIssueRequest {
+  pass: boolean;
+  note?: string | null;
+}
+
+export interface VoidQualityIssueRequest {
+  note?: string | null;
 }
 
 /**
