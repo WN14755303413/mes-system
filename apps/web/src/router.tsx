@@ -1,4 +1,5 @@
 import { Spin } from 'antd';
+import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useSessionBootstrap } from '@/hooks/useSessionBootstrap';
 import { AppLayout } from '@/layout/AppLayout';
@@ -48,6 +49,24 @@ import DebugIssuePage from '@/pages/commissioning/issue/DebugIssuePage';
 import AcceptancePage from '@/pages/commissioning/acceptance/AcceptancePage';
 import AcceptanceReportPage from '@/pages/commissioning/acceptance/AcceptanceReportPage';
 
+// M10 数据看板：ECharts 体积大，两页懒加载，整套图表库不进主包
+const CompanyDashboardPage = lazy(() => import('@/pages/dashboard/company/CompanyDashboardPage'));
+const ProjectDashboardPage = lazy(() => import('@/pages/dashboard/project/ProjectDashboardPage'));
+
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-64 items-center justify-center">
+          <Spin size="large" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
+
 /** 已实现真实页面的路径 → 组件。不在此表中的叶子路径回退到占位页。 */
 const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/user': <UserListPage />,
@@ -73,6 +92,16 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/commissioning/record': <DebugRecordPage />,
   '/commissioning/issue': <DebugIssuePage />,
   '/commissioning/acceptance': <AcceptancePage />,
+  '/dashboard/company': (
+    <LazyPage>
+      <CompanyDashboardPage />
+    </LazyPage>
+  ),
+  '/dashboard/project': (
+    <LazyPage>
+      <ProjectDashboardPage />
+    </LazyPage>
+  ),
 };
 
 function FullscreenSpin() {

@@ -25,6 +25,7 @@ import type {
   PoStatus,
   QualityIssueActionType,
   QualityIssueStatus,
+  RecordStatus,
   RequisitionStatus,
   RequisitionType,
   RiskLevel,
@@ -1765,6 +1766,280 @@ export interface AcceptanceReport {
   openDebugIssueCount: number;
   inspections: ReportInspectionItem[];
   /** 报告生成时间（服务端时间）。 */
+  generatedAt: string;
+}
+
+// ============================================================
+//  M10 数据看板：公司级看板 / 项目看板 / 工作台指标
+//
+//  三个端点各一次响应返回整板数据（服务端 Promise.all 并发聚合，
+//  对应验收标准「看板加载 < 2s」——前端只发一个请求，不逐图取数）。
+//  齐套口径完全复用 M6 KittingService，不另建第二套算法；
+//  趋势序列由 PG date_trunc 分桶后在服务端补零，前端拿到即渲染。
+// ============================================================
+
+/** 项目状态分布行（排除已作废）。 */
+export interface ProjectStatusCount {
+  status: RecordStatus;
+  count: number;
+}
+
+/** 未关闭问题按严重度分布行。 */
+export interface SeverityCount {
+  severity: IssueSeverity;
+  count: number;
+}
+
+/** 未关闭调试问题按发现阶段分布行。 */
+export interface StageCount {
+  stage: DebugStage;
+  count: number;
+}
+
+/** 报工工时按装配专业汇总行（小时）。 */
+export interface CraftHours {
+  craft: CraftType;
+  hours: number;
+}
+
+/** 日报工工时点。date 为 YYYY-MM-DD，区间内无报工的日期补零。 */
+export interface DailyHoursPoint {
+  date: string;
+  hours: number;
+}
+
+/** 月度质量问题趋势点。month 为 YYYY-MM，opened/closed 分别按创建与关闭时间归桶。 */
+export interface MonthlyIssuePoint {
+  month: string;
+  opened: number;
+  closed: number;
+}
+
+/** 检验单按类型的判定汇总（不含已作废）。 */
+export interface InspectionTypeSummary {
+  type: InspectionType;
+  pending: number;
+  passed: number;
+  rejected: number;
+}
+
+/** 延期项目行：超计划交期且未完成的项目。 */
+export interface DelayedProjectRow {
+  id: string;
+  code: string;
+  name: string;
+  managerName: string | null;
+  planEndAt: string;
+  /** 已超期天数（向上取整）。 */
+  overdueDays: number;
+  riskLevel: RiskLevel;
+  /** 该项目全部有效工单的平均进度；无工单为 0。 */
+  avgProgress: number;
+}
+
+export interface CompanyDashboardKpi {
+  /** 非作废项目总数。 */
+  totalProjects: number;
+  /** 在制项目：已发布/执行中/暂停/变更中。 */
+  activeProjects: number;
+  /** 已完成 + 已关闭。 */
+  completedProjects: number;
+  delayedProjects: number;
+  /** 30 天内到期且未完成。 */
+  dueSoonProjects: number;
+  /** 平均齐套率（参与齐套统计的项目均值）。 */
+  avgKitRate: number;
+  /** 参与齐套统计的项目数（avgKitRate 样本量，0 时前端显示「—」）。 */
+  kittingProjects: number;
+  openQualityIssues: number;
+  openDebugIssues: number;
+  /** 未关闭现场异常（M7）。 */
+  openExceptions: number;
+  /** 本自然月累计报工工时（小时）。 */
+  monthWorkHours: number;
+}
+
+/** 公司级看板（dashboard:company）。 */
+export interface CompanyDashboard {
+  kpi: CompanyDashboardKpi;
+  projectsByStatus: ProjectStatusCount[];
+  /** 齐套率升序（最缺的排前），复用 M6 总览行，cap 12。 */
+  kittingRanking: KittingOverviewItem[];
+  qualityBySeverity: SeverityCount[];
+  /** 近 6 个自然月（含当月）。 */
+  qualityTrend: MonthlyIssuePoint[];
+  debugByStage: StageCount[];
+  inspectionByType: InspectionTypeSummary[];
+  /** 近 30 天（含今日）。 */
+  workHoursTrend: DailyHoursPoint[];
+  /** 近 30 天按专业。 */
+  workHoursByCraft: CraftHours[];
+  /** 超期未完成项目，按超期天数降序，cap 10。 */
+  delayedProjects: DelayedProjectRow[];
+  generatedAt: string;
+}
+
+/** 项目看板头部信息。 */
+export interface ProjectDashboardInfo {
+  id: string;
+  code: string;
+  name: string;
+  customerName: string | null;
+  contractNo: string | null;
+  projectType: string | null;
+  status: RecordStatus;
+  riskLevel: RiskLevel;
+  managerName: string | null;
+  equipmentCount: number;
+  planStartAt: string | null;
+  planEndAt: string | null;
+  actualEndAt: string | null;
+}
+
+export interface ProjectDashboardKpi {
+  /** null = 无有效 BOM，齐套未纳入统计。 */
+  kitRate: number | null;
+  shortageRows: number;
+  workOrderCount: number;
+  /** 有效（非作废）工单平均进度。 */
+  avgWorkOrderProgress: number;
+  wbsTotal: number;
+  wbsCompleted: number;
+  wbsCompletionRate: number;
+  openQualityIssues: number;
+  openDebugIssues: number;
+  openExceptions: number;
+  openRisks: number;
+  /** 项目累计报工工时（小时）。 */
+  totalWorkHours: number;
+}
+
+/** 项目里程碑时间轴点。actualDate 非空即视为已达成（同 M4 口径）。 */
+export interface MilestonePoint {
+  id: string;
+  name: string;
+  planDate: string | null;
+  actualDate: string | null;
+}
+
+/** 工单进度条行。 */
+export interface WorkOrderProgressRow {
+  id: string;
+  code: string;
+  name: string;
+  craft: CraftType;
+  status: RecordStatus;
+  progress: number;
+  planEndAt: string | null;
+}
+
+/** 项目看板的齐套摘要（明细看 M6 齐套看板）。 */
+export interface ProjectKittingSummary {
+  bomVersion: string | null;
+  kitRate: number;
+  kitRateByQty: number;
+  fulfilledRows: number;
+  inTransitRows: number;
+  shortageRows: number;
+  longLeadAlerts: number;
+}
+
+/** 缺口最大的物料行（看板 Top N 摘要）。 */
+export interface ShortageTopRow {
+  materialCode: string;
+  materialName: string;
+  unit: string;
+  gap: number;
+  latestExpectedDate: string | null;
+  isLongLead: boolean;
+}
+
+/** 质量问题按状态分布行。 */
+export interface QualityStatusCount {
+  status: QualityIssueStatus;
+  count: number;
+}
+
+/** 未闭环问题合并行（质量 + 调试）。 */
+export interface OpenIssueRow {
+  kind: 'QUALITY' | 'DEBUG';
+  id: string;
+  code: string;
+  title: string;
+  severity: IssueSeverity;
+  /** QualityIssueStatus 或 DebugIssueStatus，前端按 kind 取对应枚举表。 */
+  status: string;
+  /** 仅调试问题：发现阶段。 */
+  stage: DebugStage | null;
+  handlerName: string | null;
+  createdAt: string;
+}
+
+/** 项目看板（dashboard:project）。 */
+export interface ProjectDashboard {
+  project: ProjectDashboardInfo;
+  kpi: ProjectDashboardKpi;
+  /** null = 无有效 BOM。 */
+  kitting: ProjectKittingSummary | null;
+  /** 缺口降序 cap 5。 */
+  shortageTop: ShortageTopRow[];
+  milestones: MilestonePoint[];
+  workOrders: WorkOrderProgressRow[];
+  /** 全状态分布（含已关闭/作废，前端图表自行取舍）。 */
+  qualityByStatus: QualityStatusCount[];
+  /** 未关闭调试问题按阶段。 */
+  debugByStage: StageCount[];
+  /** 近 30 天该项目日报工工时。 */
+  workHoursTrend: DailyHoursPoint[];
+  /** 项目累计按专业。 */
+  workHoursByCraft: CraftHours[];
+  /** 未闭环问题（质量 + 调试）按严重度/时间排序 cap 10。 */
+  openIssues: OpenIssueRow[];
+  generatedAt: string;
+}
+
+/** 工作台指标（登录即可见，无需看板权限；只含汇总计数，不含明细）。 */
+export interface WorkbenchMetrics {
+  activeProjects: number;
+  newProjectsThisMonth: number;
+  avgKitRate: number;
+  kittingProjects: number;
+  /** 全部项目缺料行合计。 */
+  shortageItems: number;
+  taskTotal: number;
+  taskCompleted: number;
+  /** 装配任务完工率（已完工 / 总数）。 */
+  assemblyCompletionRate: number;
+  /** 执行中工单数。 */
+  activeWorkOrders: number;
+  openQualityIssues: number;
+  openDebugIssues: number;
+}
+
+/** 工作台「重点项目交付进度」行：计划交期最近的在制项目。 */
+export interface WorkbenchDeliveryRow {
+  id: string;
+  code: string;
+  name: string;
+  status: RecordStatus;
+  riskLevel: RiskLevel;
+  planEndAt: string | null;
+  /** 有效工单平均进度。 */
+  progress: number;
+}
+
+/** 工作台动态行：最近未闭环的异常/质量问题/调试问题。 */
+export interface WorkbenchTodoItem {
+  kind: 'EXCEPTION' | 'QUALITY' | 'DEBUG';
+  code: string;
+  title: string;
+  createdAt: string;
+}
+
+export interface WorkbenchSummary {
+  metrics: WorkbenchMetrics;
+  delivery: WorkbenchDeliveryRow[];
+  todos: WorkbenchTodoItem[];
   generatedAt: string;
 }
 

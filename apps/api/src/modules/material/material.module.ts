@@ -12,9 +12,11 @@ import { SupplyService } from './services/supply.service';
  * M6 物料与齐套：物料主数据 / 供应数据（采购、到货、库存）/ 领料 / 齐套计算。
  *
  * PrismaService、CodeGeneratorService 由全局模块提供。
+ * KittingService 导出给 M10 看板复用——齐套口径全系统只有这一份。
  */
 @Module({
   controllers: [MaterialController, SupplyController, RequisitionController, KittingController],
   providers: [MaterialService, SupplyService, RequisitionService, KittingService],
+  exports: [KittingService],
 })
 export class MaterialModule {}
