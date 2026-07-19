@@ -110,7 +110,7 @@ export const NAV_TREE: readonly NavItem[] = [
       { path: '/system/role', title: '角色权限', permissions: ['sys:role:read'] },
       { path: '/system/dept', title: '部门管理', permissions: ['sys:dept:read'] },
       { path: '/system/audit', title: '审计日志', permissions: ['sys:audit:read'] },
-      { path: '/system/integration', title: '接口日志', permissions: ['sys:integration:read'] },
+      { path: '/system/integration', title: '系统集成', permissions: ['sys:integration:read'] },
     ],
   },
 ];

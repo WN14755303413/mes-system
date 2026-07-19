@@ -17,6 +17,7 @@ import {
 } from '@mes/shared';
 import { CodeGeneratorService } from '../../../common/code/code-generator.service';
 import { AppException } from '../../../common/exceptions/app.exception';
+import { IntegrationNotifyService } from '../../integration/services/notify.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { StateMachineService } from '../../../common/state/state-machine.service';
 import { StorageService } from '../../../common/storage/storage.service';
@@ -61,6 +62,7 @@ export class ExceptionService {
     private readonly codeGen: CodeGeneratorService,
     private readonly stateMachine: StateMachineService,
     private readonly storage: StorageService,
+    private readonly notify: IntegrationNotifyService,
     config: ConfigService,
   ) {
     // 现场照片上限收紧到图纸上限的 1/5（默认 10MB），手机原图足够
@@ -171,9 +173,10 @@ export class ExceptionService {
         HttpStatus.BAD_REQUEST,
       );
     }
+    // 存在性校验顺带取出编号与项目经理，供创建后的钉钉通知使用
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, code: true, name: true, manager: { select: { id: true, displayName: true } } },
     });
     if (!project) throw new AppException(ErrorCode.NOT_FOUND, '项目不存在', HttpStatus.NOT_FOUND);
 
@@ -181,7 +184,7 @@ export class ExceptionService {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const code = await this.codeGen.next(`EX-${today}`);
 
-    return this.prisma.workException.create({
+    const created = await this.prisma.workException.create({
       data: {
         code,
         projectId,
@@ -194,6 +197,19 @@ export class ExceptionService {
       },
       select: { id: true, code: true },
     });
+
+    // 钉钉挂点（§9.6「系统推送责任人」）：现场异常即刻通知项目经理。
+    // fire-and-forget，通知失败进异常池，不影响上报本身。
+    if (project.manager) {
+      this.notify.sendWorkMessage(
+        [{ id: project.manager.id, name: project.manager.displayName }],
+        '现场异常上报',
+        `项目「${project.name}」（${project.code}）现场异常 ${created.code}：${dto.title.trim()}，请关注处理。`,
+        '/production/exception',
+      );
+    }
+
+    return created;
   }
 
   /** 指派/改派责任人（§9.6「系统推送责任人」的一期人工版）。首次指派推进到处理中。 */

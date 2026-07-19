@@ -17,6 +17,7 @@ export const Permission = {
   SYS_DEPT_WRITE: 'sys:dept:write',
   SYS_AUDIT_READ: 'sys:audit:read',
   SYS_INTEGRATION_READ: 'sys:integration:read',
+  SYS_INTEGRATION_WRITE: 'sys:integration:write',
 
   // 项目管理
   PROJECT_READ: 'project:read',
@@ -80,6 +81,7 @@ export const PERMISSION_META: Record<Permission, { name: string; module: string 
   'sys:dept:write': { name: '维护部门', module: '系统管理' },
   'sys:audit:read': { name: '查看审计日志', module: '系统管理' },
   'sys:integration:read': { name: '查看接口日志', module: '系统管理' },
+  'sys:integration:write': { name: '集成同步与异常补偿', module: '系统管理' },
 
   'project:read': { name: '查看项目', module: '项目管理' },
   'project:create': { name: '新建项目', module: '项目管理' },

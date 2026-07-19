@@ -39,6 +39,17 @@ const envSchema = z.object({
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
 
+  // ---------- 系统集成（M11） ----------
+  // 适配器实现选择。一期只有 mock（集成预留）；二期对接真实系统后新增取值。
+  ERP_ADAPTER: z.enum(['mock']).default('mock'),
+  DINGTALK_ADAPTER: z.enum(['mock']).default('mock'),
+  // 以下凭据 mock 模式不使用，仅在状态页展示「是否已配置」；二期真实适配器读取
+  ERP_API_BASE_URL: z.string().optional(),
+  ERP_API_TOKEN: z.string().optional(),
+  DINGTALK_AGENT_ID: z.string().optional(),
+  DINGTALK_APP_KEY: z.string().optional(),
+  DINGTALK_APP_SECRET: z.string().optional(),
+
   // 仅 seed 脚本读取，应用运行时不使用
   BOOTSTRAP_ADMIN_USERNAME: z.string().optional(),
   BOOTSTRAP_ADMIN_PASSWORD: z.string().optional(),

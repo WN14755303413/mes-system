@@ -15,6 +15,7 @@ import { BomModule } from './modules/bom/bom.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DebugModule } from './modules/debug/debug.module';
 import { HealthModule } from './modules/health/health.module';
+import { IntegrationModule } from './modules/integration/integration.module';
 import { MaterialModule } from './modules/material/material.module';
 import { ProductionModule } from './modules/production/production.module';
 import { ProjectModule } from './modules/project/project.module';
@@ -46,6 +47,7 @@ import { validateEnv } from './config/env';
     QualityModule,
     DebugModule,
     DashboardModule,
+    IntegrationModule,
   ],
   providers: [
     // 顺序即执行顺序，逐层收窄：

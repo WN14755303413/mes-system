@@ -309,13 +309,17 @@ export interface AuditLogQuery extends PageQuery {
   to?: string;
 }
 
-// ---- 接口日志（M3 只读展示，重试补偿留 M11） ----
+// ---- 接口日志与系统集成（M11） ----
 
 export interface IntegrationLogItem {
   id: string;
   interfaceName: string;
   sourceSystem: string;
   targetSystem: string;
+  /** 机器可读的动作标识；为空表示不可重放（如人工 Excel 导入） */
+  action: string | null;
+  requestSummary: unknown;
+  responseSummary: unknown;
   success: boolean;
   errorMsg: string | null;
   retryCount: number;
@@ -329,6 +333,49 @@ export interface IntegrationLogQuery extends PageQuery {
   interfaceName?: string;
   success?: boolean;
   needsAttention?: boolean;
+}
+
+export type IntegrationAdapterKey = 'erp' | 'dingtalk';
+
+/** 一条集成动作在状态页上的展示信息 */
+export interface IntegrationActionInfo {
+  action: string;
+  name: string;
+  /** 如 "ERP → MES" */
+  direction: string;
+  /** manual：状态页可手动触发；business：由业务事件触发（或二期挂接） */
+  trigger: 'manual' | 'business';
+  lastRun: { at: string; success: boolean } | null;
+}
+
+export interface IntegrationAdapterStatus {
+  key: IntegrationAdapterKey;
+  title: string;
+  /** 当前实现模式：mock 为一期预留实现，二期替换为真实对接 */
+  mode: 'mock';
+  /** 真实凭据是否已在环境变量中配置（mock 模式下仅作提示） */
+  configured: boolean;
+  note: string;
+  actions: IntegrationActionInfo[];
+}
+
+export interface IntegrationStatusResponse {
+  adapters: IntegrationAdapterStatus[];
+  /** 异常池未处理数（失败且未标记解决） */
+  pendingExceptions: number;
+}
+
+export interface TriggerSyncRequest {
+  /** 演示用：让本次调用失败进异常池；重试时即成功，用于验证补偿闭环 */
+  simulateFail?: boolean;
+}
+
+/** 一次集成动作（手动同步 / 重试）的执行结果 */
+export interface IntegrationRunResult {
+  logId: string;
+  success: boolean;
+  errorMsg: string | null;
+  summary: unknown;
 }
 
 // ============================================================

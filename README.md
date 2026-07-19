@@ -88,8 +88,10 @@ docker compose up -d --build
 ```
 
 前端经 nginx 暴露在 `8080` 端口，并将 `/api` 反代到后端容器；后端不对宿主机暴露端口。
-生产环境请在 nginx 之前再套一层 TLS 终结（或直接在本 nginx 配置证书），
-因为 `COOKIE_SECURE=true` 要求 HTTPS。
+生产环境必须在 nginx 之前做 TLS 终结（`COOKIE_SECURE=true` 要求 HTTPS）。
+
+完整流程（环境变量清单、TLS 配置、首次初始化、升级、备份、故障排查）见
+[`docs/部署指南.md`](./docs/部署指南.md)。
 
 ## 实施进度
 
@@ -106,4 +108,4 @@ docker compose up -d --build
 | M8 | 质量管理：检验单、质量问题 8D 闭环 | ✅ 已完成 |
 | M9 | 调试与 FAT/SAT 验收：调试记录、问题多轮整改复测、验收报告 PDF | ✅ 已完成 |
 | M10 | 数据看板：公司级/项目看板（ECharts）、工作台真实指标 | ✅ 已完成 |
-| M11 | ERP / 钉钉集成与生产部署 | |
+| M11 | 系统集成与生产部署：ERP/钉钉 mock 适配器、异常池重试补偿、部署指南 | ✅ 已完成 |

@@ -16,7 +16,9 @@ COPY apps/api apps/api
 RUN npx prisma generate --schema apps/api/prisma/schema.prisma
 RUN npm run build --workspace=apps/api
 
-# 剔除 devDependencies，减小运行镜像
+# 剔除 devDependencies，减小运行镜像。
+# prisma CLI 与 tsx 在 dependencies 里：启动时的 migrate deploy 和运维执行 seed
+# 都要在容器内离线可用，不能依赖 npx 临时从 registry 拉取（版本漂移 + 断网即挂）
 RUN npm prune --omit=dev
 
 # ---------- 运行阶段 ----------

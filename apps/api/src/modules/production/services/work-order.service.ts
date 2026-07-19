@@ -16,6 +16,7 @@ import {
 } from '@mes/shared';
 import { CodeGeneratorService } from '../../../common/code/code-generator.service';
 import { AppException } from '../../../common/exceptions/app.exception';
+import { IntegrationNotifyService } from '../../integration/services/notify.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { StateMachineService } from '../../../common/state/state-machine.service';
 import type {
@@ -87,6 +88,7 @@ export class WorkOrderService {
     private readonly prisma: PrismaService,
     private readonly codeGen: CodeGeneratorService,
     private readonly stateMachine: StateMachineService,
+    private readonly notify: IntegrationNotifyService,
   ) {}
 
   // ============ 工单 ============
@@ -495,17 +497,37 @@ export class WorkOrderService {
         HttpStatus.BAD_REQUEST,
       );
     }
+    let assignee: { id: string; displayName: string } | null = null;
     if (assigneeId) {
-      const user = await this.prisma.user.findFirst({
+      assignee = await this.prisma.user.findFirst({
         where: { id: assigneeId, deletedAt: null, status: 'ACTIVE' },
-        select: { id: true },
+        select: { id: true, displayName: true },
       });
-      if (!user) {
+      if (!assignee) {
         throw new AppException(ErrorCode.NOT_FOUND, '被派工人员不存在或已停用', HttpStatus.NOT_FOUND);
       }
     }
 
     await this.prisma.assemblyTask.update({ where: { id: taskId }, data: { assigneeId } });
+
+    // 钉钉挂点（§5.2）：派工即通知装配工。fire-and-forget，失败进异常池不影响派工。
+    if (assignee) {
+      const context = await this.prisma.assemblyTask.findUnique({
+        where: { id: taskId },
+        select: {
+          name: true,
+          workOrder: { select: { code: true, project: { select: { name: true } } } },
+        },
+      });
+      if (context) {
+        this.notify.sendWorkMessage(
+          [{ id: assignee.id, name: assignee.displayName }],
+          '新装配任务',
+          `项目「${context.workOrder.project.name}」工单 ${context.workOrder.code}：任务「${context.name}」已派给您，请在「现场报工」中查看。`,
+          '/production/report',
+        );
+      }
+    }
   }
 
   // ============ 进度汇总（报工回写链路的核心） ============

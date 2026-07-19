@@ -16,7 +16,8 @@ import UserListPage from '@/pages/system/user/UserListPage';
 import RolePage from '@/pages/system/role/RolePage';
 import DeptPage from '@/pages/system/dept/DeptPage';
 import AuditLogPage from '@/pages/system/audit/AuditLogPage';
-import IntegrationLogPage from '@/pages/system/integration/IntegrationLogPage';
+// M11 系统集成：适配器状态 / 手动同步 / 接口日志与异常池（接替 M3 的只读接口日志页）
+import IntegrationPage from '@/pages/system/integration/IntegrationPage';
 
 // M4 项目管理：台账 / 甘特图 / 风险与问题
 import ProjectListPage from '@/pages/project/list/ProjectListPage';
@@ -73,7 +74,7 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/system/role': <RolePage />,
   '/system/dept': <DeptPage />,
   '/system/audit': <AuditLogPage />,
-  '/system/integration': <IntegrationLogPage />,
+  '/system/integration': <IntegrationPage />,
   '/project/list': <ProjectListPage />,
   '/project/gantt': <ProjectGanttPage />,
   '/project/risk': <ProjectRiskPage />,

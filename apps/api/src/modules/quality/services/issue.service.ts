@@ -18,6 +18,7 @@ import {
 } from '@mes/shared';
 import { CodeGeneratorService } from '../../../common/code/code-generator.service';
 import { AppException } from '../../../common/exceptions/app.exception';
+import { IntegrationNotifyService } from '../../integration/services/notify.service';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import type {
   AssignQualityIssueDto,
@@ -75,6 +76,7 @@ export class IssueService {
     private readonly prisma: PrismaService,
     private readonly codeGen: CodeGeneratorService,
     private readonly photos: QcPhotoService,
+    private readonly notify: IntegrationNotifyService,
   ) {}
 
   private canSeeAll(user: CurrentUser): boolean {
@@ -294,6 +296,14 @@ export class IssueService {
         },
       }),
     ]);
+
+    // 钉钉挂点（§9.7「分派责任部门」）：分派即通知责任人。失败进异常池，不影响分派。
+    this.notify.sendWorkMessage(
+      [{ id: handler.id, name: handler.displayName }],
+      '质量问题分派',
+      `质量问题 ${row.code}「${row.title}」已分派给您处理${dto.note ? `：${dto.note}` : ''}，请及时整改。`,
+      '/quality/issue',
+    );
   }
 
   /** 责任人提交整改：可同时补写 8D 字段，流转到待复检。 */

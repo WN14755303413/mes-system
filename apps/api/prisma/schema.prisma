@@ -299,6 +299,11 @@ model IntegrationLog {
   interfaceName   String    @map("interface_name")
   sourceSystem    String    @map("source_system") // ERP / DINGTALK / ANT / MES
   targetSystem    String    @map("target_system")
+  /// 机器可读的动作标识（如 dingtalk.sendWorkMessage），重试按它路由回适配器；
+  /// 不可重放的记录（如人工 Excel 导入）为空
+  action          String?
+  /// 重放该动作所需的完整入参。requestSummary 给人看，payload 给重试用
+  payload         Json?
   requestSummary  Json?     @map("request_summary")
   responseSummary Json?     @map("response_summary")
   success         Boolean
@@ -313,6 +318,7 @@ model IntegrationLog {
 
   @@index([interfaceName, createdAt])
   @@index([success, needsAttention])
+  @@index([action, createdAt])
   @@map("sys_integration_log")
 }
 
