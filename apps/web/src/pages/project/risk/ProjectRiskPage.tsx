@@ -271,6 +271,8 @@ function RiskTab({
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={editing ? '编辑风险' : '登记风险'}
         open={open}
         onCancel={() => setOpen(false)}
@@ -461,6 +463,8 @@ function IssueTab({
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={editing ? '编辑问题' : '新增问题'}
         open={open}
         onCancel={() => setOpen(false)}

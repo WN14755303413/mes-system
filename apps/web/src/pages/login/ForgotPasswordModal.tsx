@@ -51,6 +51,8 @@ export function ForgotPasswordModal({ open, onClose, defaultUsername }: Props) {
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       onCancel={onClose}
       footer={null}

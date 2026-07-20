@@ -336,6 +336,8 @@ function VersionTable({
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={ecoSource ? `发起变更（源版本 ${ecoSource.version}）` : '新建 BOM 版本'}
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
@@ -585,6 +587,8 @@ function ItemPanel({
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={editing ? '编辑明细' : '新增明细'}
         open={itemOpen}
         onCancel={() => setItemOpen(false)}
@@ -648,6 +652,8 @@ function ItemPanel({
       </Modal>
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title="批量粘贴导入"
         open={pasteOpen}
         onCancel={() => setPasteOpen(false)}

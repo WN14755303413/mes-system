@@ -202,6 +202,8 @@ export default function DispatchPage() {
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={!!assigning}
         title={assigning ? `${assigning.assigneeId ? '改派' : '派工'}：${assigning.name}` : ''}
         okText="确认"

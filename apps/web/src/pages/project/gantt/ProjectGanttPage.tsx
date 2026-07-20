@@ -360,6 +360,8 @@ export default function ProjectGanttPage() {
 
       {/* 新建/编辑任务 */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={editing ? '编辑任务' : '新建任务'}
         open={editOpen}
         onCancel={() => setEditOpen(false)}

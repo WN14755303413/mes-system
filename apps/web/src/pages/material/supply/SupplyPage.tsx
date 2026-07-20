@@ -219,6 +219,8 @@ function PoTab({ canWrite }: { canWrite: boolean }) {
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={!!editing}
         title={`维护交期：${editing?.orderNo} / ${editing?.materialCode}`}
         okText="保存"
@@ -569,6 +571,8 @@ function RequisitionTab() {
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={createOpen}
         title="发起领料/退料"
         okText="提交"

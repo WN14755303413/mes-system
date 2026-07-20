@@ -505,6 +505,8 @@ function WorkOrderModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title={editing ? `编辑工单 ${editing.code}` : '新建装配工单'}
       okText="保存"
@@ -712,6 +714,8 @@ function TaskDrawer({
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!woId}
       width={960}
       title={
@@ -763,6 +767,8 @@ function TaskDrawer({
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={taskModalOpen}
         title={editingTask ? `编辑任务：${editingTask.name}` : '添加装配任务'}
         okText="保存"

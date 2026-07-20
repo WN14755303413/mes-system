@@ -323,6 +323,8 @@ function IssueCreateModal({ open, onClose }: { open: boolean; onClose: () => voi
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       width={560}
       title="登记调试问题"
@@ -505,6 +507,8 @@ function IssueDetailDrawer({ id, onClose }: { id: string | undefined; onClose: (
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!id}
       width={640}
       title={row ? `${row.code} ${row.title}` : '调试问题详情'}
@@ -636,6 +640,8 @@ function IssueDetailDrawer({ id, onClose }: { id: string | undefined; onClose: (
       )}
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={!!action}
         width={action === 'submit' || action === 'edit' ? 560 : 420}
         title={action ? ACTION_TITLE[action] : ''}

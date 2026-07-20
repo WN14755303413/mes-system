@@ -262,6 +262,8 @@ function ReportModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={!!task}
       title={task ? `报工：${task.name}` : ''}
       okText="提交"
@@ -342,6 +344,8 @@ function TaskDetailDrawer({
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!taskId}
       width={520}
       title={task ? task.name : '任务详情'}

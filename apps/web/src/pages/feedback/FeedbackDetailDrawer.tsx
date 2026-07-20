@@ -182,6 +182,8 @@ export function FeedbackDetailDrawer({ id, onClose }: { id: string | undefined; 
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!id}
       onClose={onClose}
       width={640}
@@ -327,6 +329,8 @@ export function FeedbackDetailDrawer({ id, onClose }: { id: string | undefined; 
 
       {/* 状态动作的说明弹窗（解决/驳回/重开均必填说明） */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={!!noteAction}
         title={noteAction ? NOTE_ACTION_META[noteAction].title : ''}
         okText={noteAction ? NOTE_ACTION_META[noteAction].okText : '确定'}

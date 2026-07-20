@@ -80,6 +80,8 @@ export function ExceptionCreateModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title="上报现场异常"
       okText="提交"

@@ -493,6 +493,8 @@ function DebugRecordFormModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       width={880}
       title={editing ? `编辑调试记录 ${editing.code}` : '新建调试记录'}
@@ -613,6 +615,8 @@ function RecordDetailDrawer({
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!id}
       width={680}
       title={row ? `${row.code} ${row.title}` : '调试记录详情'}
@@ -831,6 +835,8 @@ function QuickIssueModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       width={480}
       title={`登记调试问题（${record.code}）`}

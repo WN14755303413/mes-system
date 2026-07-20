@@ -344,6 +344,8 @@ export default function ProjectListPage() {
 
       {/* 新建/编辑 */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={editing ? `编辑项目 ${editing.code}` : '新建项目'}
         open={editOpen}
         onCancel={() => setEditOpen(false)}
@@ -502,6 +504,8 @@ function ProjectDetailDrawer({
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       title={
         detail ? (
           <Space>
@@ -642,6 +646,8 @@ function ProjectDetailDrawer({
 
       {/* 里程碑编辑 */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={msEditing ? '编辑里程碑' : '添加里程碑'}
         open={msOpen}
         onCancel={() => setMsOpen(false)}
@@ -666,6 +672,8 @@ function ProjectDetailDrawer({
 
       {/* 添加成员 */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title="添加成员"
         open={memberOpen}
         onCancel={() => setMemberOpen(false)}

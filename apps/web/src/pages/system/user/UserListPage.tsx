@@ -401,13 +401,14 @@ export default function UserListPage() {
 
       {/* 新建 / 编辑 */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={editing ? '编辑用户' : '新建用户'}
         open={editOpen}
         onCancel={() => setEditOpen(false)}
         onOk={submitEdit}
         confirmLoading={createUser.isPending || updateUser.isPending}
         destroyOnClose
-        maskClosable={false}
       >
         <Form form={form} layout="vertical" className="mt-4" preserve={false}>
           {!editing && (
@@ -458,6 +459,8 @@ export default function UserListPage() {
 
       {/* 分配角色 */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={`分配角色 · ${roleTarget?.displayName ?? ''}`}
         open={roleOpen}
         onCancel={() => setRoleOpen(false)}

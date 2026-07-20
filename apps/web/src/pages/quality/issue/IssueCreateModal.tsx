@@ -62,6 +62,8 @@ export function IssueCreateModal({ open, onClose }: { open: boolean; onClose: ()
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title="发起质量问题"
       okText="发起"

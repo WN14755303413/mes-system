@@ -270,6 +270,8 @@ export default function RolePage() {
 
       {/* 新建角色 */}
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title="新建角色"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}

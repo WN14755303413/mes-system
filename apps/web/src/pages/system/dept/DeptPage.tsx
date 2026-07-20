@@ -185,6 +185,8 @@ export default function DeptPage() {
       </div>
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         title={editingId ? '编辑部门' : '新建部门'}
         open={open}
         onCancel={() => setOpen(false)}

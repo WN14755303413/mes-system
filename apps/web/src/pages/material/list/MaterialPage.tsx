@@ -175,6 +175,8 @@ export default function MaterialPage() {
       />
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={modalOpen}
         title={editing ? `编辑物料 ${editing.code}` : '新建物料'}
         okText="保存"

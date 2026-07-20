@@ -283,6 +283,8 @@ function UploadModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       title="上传图纸"
       open={open}
       onCancel={onClose}

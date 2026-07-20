@@ -440,6 +440,8 @@ function AcceptanceFormModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       width={900}
       title={editing ? `编辑验收单 ${editing.code}` : '新建验收单'}
@@ -564,6 +566,8 @@ function AcceptanceDetailDrawer({
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!id}
       width={680}
       title={row ? `${row.code} ${row.title}` : '验收单详情'}
@@ -678,6 +682,8 @@ function AcceptanceDetailDrawer({
       )}
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={concludeOpen}
         width={520}
         title="出具验收结论"

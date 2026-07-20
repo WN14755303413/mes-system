@@ -45,6 +45,8 @@ export function PasteImportModal<T>({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title={title}
       width={720}

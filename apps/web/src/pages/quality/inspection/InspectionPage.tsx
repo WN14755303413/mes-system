@@ -305,6 +305,8 @@ export function InspectionDetailDrawer({
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!id}
       width={640}
       title={row ? `${row.code} ${row.title}` : '检验单详情'}
@@ -468,6 +470,8 @@ export function InspectionDetailDrawer({
       )}
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={judgeOpen}
         title="检验判定"
         okText="确认判定"

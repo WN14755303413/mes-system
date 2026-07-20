@@ -251,6 +251,8 @@ export function InspectionFormModal({
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       width={860}
       title={editing ? `编辑检验单 ${editing.code}` : '新建检验单'}

@@ -326,6 +326,8 @@ function ExceptionDetailDrawer({
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!id}
       width={560}
       title={row ? `${row.code} ${row.title}` : '异常详情'}
@@ -426,6 +428,8 @@ function ExceptionDetailDrawer({
       )}
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={!!action}
         title={action ? ACTION_TITLE[action] : ''}
         okText="确认"

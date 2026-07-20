@@ -431,6 +431,8 @@ function IssueDetailDrawer({ id, onClose }: { id: string | undefined; onClose: (
 
   return (
     <Drawer
+      maskClosable={false}
+      keyboard={false}
       open={!!id}
       width={640}
       title={row ? `${row.code} ${row.title}` : '问题单详情'}
@@ -597,6 +599,8 @@ function IssueDetailDrawer({ id, onClose }: { id: string | undefined; onClose: (
       )}
 
       <Modal
+        maskClosable={false}
+        keyboard={false}
         open={!!action}
         width={action === 'submit' || action === 'edit' ? 620 : 420}
         title={action ? ACTION_TITLE[action] : ''}

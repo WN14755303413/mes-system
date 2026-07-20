@@ -113,6 +113,8 @@ export function FeedbackModal({ open, onClose }: { open: boolean; onClose: () =>
 
   return (
     <Modal
+      maskClosable={false}
+      keyboard={false}
       open={open}
       title="问题反馈"
       okText="提交反馈"
