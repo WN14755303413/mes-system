@@ -65,6 +65,9 @@ export const Permission = {
   // 看板
   DASHBOARD_COMPANY: 'dashboard:company',
   DASHBOARD_PROJECT: 'dashboard:project',
+
+  // 反馈中心（提交/查看自己的/回复不挂权限点，manage 是处理方专属）
+  FEEDBACK_MANAGE: 'feedback:manage',
 } as const;
 
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -122,6 +125,8 @@ export const PERMISSION_META: Record<Permission, { name: string; module: string 
 
   'dashboard:company': { name: '公司级看板', module: '数据看板' },
   'dashboard:project': { name: '项目看板', module: '数据看板' },
+
+  'feedback:manage': { name: '处理用户反馈', module: '反馈中心' },
 };
 
 /**

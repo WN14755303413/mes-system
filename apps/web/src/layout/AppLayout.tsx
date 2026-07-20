@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { FeedbackModal } from '@/pages/feedback/FeedbackModal';
 import { AppHeader } from './AppHeader';
 import { AppSider } from './AppSider';
 import { findNavPath } from './nav';
@@ -18,6 +19,8 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(SIDER_COLLAPSED_KEY) === '1',
   );
+  // 全局反馈弹窗：顶栏入口在 AppHeader，状态提升到布局层（M12）
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const toggle = () => {
     setCollapsed((c) => {
@@ -54,7 +57,7 @@ export function AppLayout() {
         />
 
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-          <AppHeader />
+          <AppHeader onOpenFeedback={() => setFeedbackOpen(true)} />
 
           <main className="min-h-0 flex-1 overflow-y-auto">
             <AnimatePresence mode="wait" initial={false}>
@@ -72,6 +75,8 @@ export function AppLayout() {
           </main>
         </div>
       </div>
+
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   );
 }

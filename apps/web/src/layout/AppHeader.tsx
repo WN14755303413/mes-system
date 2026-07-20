@@ -1,10 +1,11 @@
-import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
-import { App, Avatar, Breadcrumb, Dropdown } from 'antd';
+import { CommentOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { App, Avatar, Breadcrumb, Dropdown, Tooltip } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { authApi, useHealth } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { findNavPath } from './nav';
+import { NotificationBell } from './NotificationBell';
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -34,7 +35,7 @@ function HealthDots() {
   );
 }
 
-export function AppHeader() {
+export function AppHeader({ onOpenFeedback }: { onOpenFeedback: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { message } = App.useApp();
@@ -68,6 +69,22 @@ export function AppHeader() {
 
       <div className="flex items-center gap-5">
         <HealthDots />
+
+        <div className="flex items-center gap-1">
+          <Tooltip title="问题反馈" mouseEnterDelay={0.5}>
+            <button
+              type="button"
+              onClick={onOpenFeedback}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-base text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              aria-label="问题反馈"
+            >
+              <CommentOutlined />
+            </button>
+          </Tooltip>
+          <NotificationBell />
+        </div>
+
+        <div className="h-6 w-px bg-slate-200" />
 
         <div className="hidden text-right md:block">
           <div className="font-mono text-sm font-medium tabular-nums text-slate-700">{time}</div>

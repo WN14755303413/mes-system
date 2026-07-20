@@ -15,6 +15,10 @@ import type {
   DispositionType,
   DrawingStatus,
   ExceptionStatus,
+  FeedbackActionType,
+  FeedbackSeverity,
+  FeedbackStatus,
+  FeedbackType,
   InspectionStatus,
   InspectionType,
   IssuePriority,
@@ -2112,4 +2116,122 @@ export function evaluatePassword(pwd: string): PasswordStrength {
     label: ['极弱', '弱', '一般', '强', '很强'][score],
     issues,
   };
+}
+
+// ============================================================
+//  M12 反馈中心：问题反馈闭环 + 站内通知
+//
+//  反馈单 = 主表最新值 + 动作日志（对话与状态流转合一，只增不改）。
+//  附件复用 sys_attachment：FEEDBACK 挂主单、FEEDBACK_ACTION 挂回复。
+// ============================================================
+
+export interface CreateFeedbackRequest {
+  title: string;
+  type: FeedbackType;
+  severity: FeedbackSeverity;
+  description?: string | null;
+  /** 提交时所在页面路由（自动采集，用户可选择不附带） */
+  pagePath?: string | null;
+  pageTitle?: string | null;
+  /** UA / 分辨率 / dpr 等环境快照 */
+  clientInfo?: string | null;
+}
+
+export interface FeedbackListQuery extends PageQuery {
+  status?: FeedbackStatus;
+  type?: FeedbackType;
+  keyword?: string;
+  /** 有 feedback:manage 时：mine=1 只看自己提交的；无权限者恒为自己的 */
+  mine?: '1';
+}
+
+export interface FeedbackRow {
+  id: string;
+  code: string;
+  type: FeedbackType;
+  severity: FeedbackSeverity;
+  status: FeedbackStatus;
+  title: string;
+  pageTitle: string | null;
+  submitterName: string | null;
+  handlerName: string | null;
+  attachmentCount: number;
+  /** 最后一次动作时间（对话有来往就会前移，列表按它排序） */
+  lastActionAt: string;
+  createdAt: string;
+}
+
+export interface FeedbackActionItem {
+  id: string;
+  type: FeedbackActionType;
+  note: string | null;
+  operatorId: string | null;
+  operatorName: string | null;
+  /** 操作人是否提交人本人（前端对话流据此分左右侧） */
+  bySubmitter: boolean;
+  attachments: AttachmentItem[];
+  createdAt: string;
+}
+
+export interface FeedbackDetail {
+  id: string;
+  code: string;
+  type: FeedbackType;
+  severity: FeedbackSeverity;
+  status: FeedbackStatus;
+  title: string;
+  description: string | null;
+  pagePath: string | null;
+  pageTitle: string | null;
+  clientInfo: string | null;
+  submitterId: string;
+  submitterName: string | null;
+  handlerId: string | null;
+  handlerName: string | null;
+  resolvedAt: string | null;
+  attachments: AttachmentItem[];
+  actions: FeedbackActionItem[];
+  createdAt: string;
+}
+
+export interface FeedbackReplyRequest {
+  note: string;
+}
+
+export interface FeedbackTransitionRequest {
+  type: Exclude<FeedbackActionType, 'CREATE' | 'REPLY'>;
+  /** RESOLVE/REJECT/REOPEN 必填 */
+  note?: string | null;
+}
+
+/** 反馈统计。scope=ALL 为全局（feedback:manage），MINE 为本人提交的。 */
+export interface FeedbackStats {
+  scope: 'ALL' | 'MINE';
+  open: number;
+  processing: number;
+  resolved: number;
+  rejected: number;
+  /** 近 7 天新增 */
+  weekNew: number;
+}
+
+// ---- 站内通知 ----
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  content: string;
+  link: string | null;
+  /** null = 未读 */
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationListQuery extends PageQuery {
+  /** unread=1 只取未读 */
+  unread?: '1';
+}
+
+export interface UnreadCountResult {
+  count: number;
 }

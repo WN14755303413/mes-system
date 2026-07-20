@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   ClusterOutlined,
+  CommentOutlined,
   ExperimentOutlined,
   FileProtectOutlined,
   FundOutlined,
@@ -29,6 +30,7 @@ const ICONS: Record<string, React.ReactNode> = {
   FileProtectOutlined: <FileProtectOutlined />,
   ExperimentOutlined: <ExperimentOutlined />,
   FundOutlined: <FundOutlined />,
+  CommentOutlined: <CommentOutlined />,
   SettingOutlined: <SettingOutlined />,
 };
 

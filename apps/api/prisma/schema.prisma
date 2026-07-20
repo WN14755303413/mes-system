@@ -120,6 +120,12 @@ model User {
   createdAcceptances    Acceptance[]       @relation("AcceptanceCreator")
   concludedAcceptances  Acceptance[]       @relation("AcceptanceConcluder")
 
+  // 反馈中心域反向关系（M12）
+  submittedFeedbacks Feedback[]       @relation("FeedbackSubmitter")
+  handledFeedbacks   Feedback[]       @relation("FeedbackHandler")
+  feedbackActions    FeedbackAction[] @relation("FeedbackOperator")
+  notifications      Notification[]   @relation("NotificationOwner")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -834,7 +840,7 @@ model Drawing {
   voidedAt DateTime? @map("voided_at")
   remark   String?
 
-  bomItems BomItem[]
+  bomItems      BomItem[]
   /// 关联本图纸的装配任务（M7）。装配工在「我的任务」里按图作业。
   assemblyTasks AssemblyTask[] @relation("AssemblyTaskDrawing")
 
@@ -865,7 +871,7 @@ model WorkOrder {
   projectId String  @map("project_id")
   project   Project @relation("WorkOrderProject", fields: [projectId], references: [id], onDelete: Cascade)
 
-  name String
+  name  String
   /// 装配专业（CraftType）：机械/电气/管路/其它。仅草稿态可改。
   craft String @default("MECH")
 
@@ -889,10 +895,10 @@ model WorkOrder {
 
   remark String?
 
-  tasks      AssemblyTask[]
-  exceptions WorkException[]
-  inspections   Inspection[]   @relation("InspectionWorkOrder")
-  qualityIssues QualityIssue[] @relation("QualityIssueWorkOrder")
+  tasks         AssemblyTask[]
+  exceptions    WorkException[]
+  inspections   Inspection[]    @relation("InspectionWorkOrder")
+  qualityIssues QualityIssue[]  @relation("QualityIssueWorkOrder")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -939,10 +945,10 @@ model AssemblyTask {
   requirement String?
   remark      String?
 
-  reports    WorkReport[]
-  exceptions WorkException[]
-  inspections   Inspection[]   @relation("InspectionTask")
-  qualityIssues QualityIssue[] @relation("QualityIssueTask")
+  reports       WorkReport[]
+  exceptions    WorkException[]
+  inspections   Inspection[]    @relation("InspectionTask")
+  qualityIssues QualityIssue[]  @relation("QualityIssueTask")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1130,14 +1136,14 @@ model InspectionItem {
   seq Int
 
   /// 检验项目，如「外观」「尺寸 φ50±0.02」。
-  name String
+  name     String
   /// 标准要求。
   standard String?
   /// 实测值/实况记录。
-  actual String?
+  actual   String?
   /// 单项判定；null=未判定。
-  passed Boolean?
-  remark String?
+  passed   Boolean?
+  remark   String?
 
   @@index([inspectionId])
   @@map("qc_inspection_item")
@@ -1185,13 +1191,13 @@ model QualityIssue {
   /// D3 遏制措施（临时围堵，防止不良流出）。
   containmentAction String? @map("containment_action")
   /// D4 根因分析。
-  rootCause String? @map("root_cause")
+  rootCause         String? @map("root_cause")
   /// D5/D6 纠正措施及实施。
-  correctiveAction String? @map("corrective_action")
+  correctiveAction  String? @map("corrective_action")
   /// D7 预防措施（防再发，横向展开）。
-  preventiveAction String? @map("preventive_action")
+  preventiveAction  String? @map("preventive_action")
   /// DispositionType：不合格品处置（返工/返修/让步接收/退货/报废）。
-  disposition String?
+  disposition       String?
 
   reporterId String? @map("reporter_id")
   reporter   User?   @relation("QualityIssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
@@ -1307,15 +1313,15 @@ model DebugParam {
   seq Int
 
   /// 参数项，如「药液流量」「腔体温度」。
-  name String
+  name     String
   /// 标准值/范围，如「2.0±0.1 L/min」。
   standard String?
   /// 实测值。
-  actual String?
-  unit   String?
+  actual   String?
+  unit     String?
   /// 达标判定；null=未判定。
-  passed Boolean?
-  remark String?
+  passed   Boolean?
+  remark   String?
 
   @@index([recordId])
   @@map("debug_param")
@@ -1459,15 +1465,112 @@ model AcceptanceItem {
   seq Int
 
   /// 检查项，如「UPH 产能验证」「安全联锁测试」。
-  name String
+  name     String
   /// 验收标准。
   standard String?
   /// 实测/核查结果。
-  actual String?
+  actual   String?
   /// 单项判定；null=未核查。
-  passed Boolean?
-  remark String?
+  passed   Boolean?
+  remark   String?
 
   @@index([acceptanceId])
   @@map("debug_acceptance_item")
+}
+
+// ============================================================
+//  反馈中心域（M12）
+//
+//  试运行期的问题反馈闭环：任何登录用户提交（行级收窄同 M8 问题单），
+//  feedback:manage 者接单/回复/解决/驳回，提交人可重开。
+//  动作日志只增不改，REPLY 与状态动作同表——时间线即完整对话与流转历史。
+//  附件复用 sys_attachment（FEEDBACK 主单 / FEEDBACK_ACTION 回复）。
+// ============================================================
+
+/// 反馈单（M12）。编号 FB-YYYYMMDD-XXX。主表存最新状态，历史见动作日志。
+model Feedback {
+  id   String @id @default(cuid())
+  code String @unique
+
+  /// FeedbackType：BUG/UI/SUGGESTION/OTHER。
+  type String
+
+  /// FeedbackSeverity：BLOCKER/NORMAL/MINOR。
+  severity String @default("MINOR")
+
+  /// FeedbackStatus：OPEN/PROCESSING/RESOLVED/REJECTED。
+  status String @default("OPEN")
+
+  title       String
+  description String?
+
+  // ---- 环境快照：提交时前端自动采集，帮助定位「哪个页面出的问题」----
+  pagePath   String? @map("page_path")
+  pageTitle  String? @map("page_title")
+  /// UA · 分辨率 · dpr 等，纯文本。
+  clientInfo String? @map("client_info")
+
+  submitterId String @map("submitter_id")
+  submitter   User   @relation("FeedbackSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+
+  /// 处理人。接单（START）时记录为操作人；REOPEN 保留原处理人继续跟进。
+  handlerId String? @map("handler_id")
+  handler   User?   @relation("FeedbackHandler", fields: [handlerId], references: [id], onDelete: SetNull)
+
+  resolvedAt DateTime? @map("resolved_at")
+
+  actions FeedbackAction[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([submitterId, status])
+  @@index([handlerId])
+  @@map("sys_feedback")
+}
+
+/// 反馈动作日志。只增不改不删——CREATE/REPLY/START/RESOLVE/REJECT/REOPEN
+/// 全部入此表，对话流与状态流转历史由此完整可查（同 qc_issue_action 哲学）。
+model FeedbackAction {
+  id         String   @id @default(cuid())
+  feedbackId String   @map("feedback_id")
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  /// FeedbackActionType。
+  type String
+
+  note String?
+
+  operatorId String? @map("operator_id")
+  operator   User?   @relation("FeedbackOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([feedbackId, createdAt])
+  @@map("sys_feedback_action")
+}
+
+/// 站内通知（M12）。顶栏铃铛的数据源；钉钉 mock 之外唯一真实触达渠道。
+/// 业务侧经 NotificationService.push 写入，反馈闭环是第一个挂点，
+/// 二期可把派工/质量分派等钉钉挂点同步补上站内通知。
+model Notification {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation("NotificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  title   String
+  content String
+
+  /// 点击跳转的站内路径，如 /feedback?id=xxx。
+  link String?
+
+  /// null = 未读。
+  readAt DateTime? @map("read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("sys_notification")
 }

@@ -101,6 +101,12 @@ export const NAV_TREE: readonly NavItem[] = [
     ],
   },
   {
+    path: '/feedback',
+    title: '反馈中心',
+    icon: 'CommentOutlined',
+    // 不配权限：反馈面向所有登录用户，试运行期是收集问题的主通道
+  },
+  {
     path: '/system',
     title: '系统管理',
     icon: 'SettingOutlined',

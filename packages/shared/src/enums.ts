@@ -731,3 +731,91 @@ export const ACCEPTANCE_CONCLUSIONS = [
   AcceptanceStatus.CONDITIONAL,
   AcceptanceStatus.FAILED,
 ] as const;
+
+// ============================================================
+//  反馈中心域枚举（M12）
+//
+//  产品试运行期的问题反馈通道：任何登录用户可提交（不挂权限点，
+//  行级收窄同 M8 问题单先例），feedback:manage 者处理闭环。
+//  REPLY 是双向对话动作，不流转状态；状态动作走 FEEDBACK_ACTION_RULES。
+// ============================================================
+
+/** 反馈类型。 */
+export const FeedbackType = {
+  BUG: 'BUG', // 功能缺陷
+  UI: 'UI', // 界面体验
+  SUGGESTION: 'SUGGESTION', // 功能建议
+  OTHER: 'OTHER', // 其他
+} as const;
+export type FeedbackType = (typeof FeedbackType)[keyof typeof FeedbackType];
+
+export const FEEDBACK_TYPE_LABEL: Record<FeedbackType, string> = {
+  BUG: '功能缺陷',
+  UI: '界面体验',
+  SUGGESTION: '功能建议',
+  OTHER: '其他',
+};
+
+/** 影响程度。独立于质量域的 IssueSeverity——反馈面向全员，用大白话分档。 */
+export const FeedbackSeverity = {
+  BLOCKER: 'BLOCKER', // 无法工作
+  NORMAL: 'NORMAL', // 影响使用
+  MINOR: 'MINOR', // 一般
+} as const;
+export type FeedbackSeverity = (typeof FeedbackSeverity)[keyof typeof FeedbackSeverity];
+
+export const FEEDBACK_SEVERITY_LABEL: Record<FeedbackSeverity, string> = {
+  BLOCKER: '无法工作',
+  NORMAL: '影响使用',
+  MINOR: '一般',
+};
+
+/** 反馈状态。RESOLVED/REJECTED 是终态，但提交人可 REOPEN 重开。 */
+export const FeedbackStatus = {
+  OPEN: 'OPEN', // 待处理
+  PROCESSING: 'PROCESSING', // 处理中
+  RESOLVED: 'RESOLVED', // 已解决
+  REJECTED: 'REJECTED', // 已驳回
+} as const;
+export type FeedbackStatus = (typeof FeedbackStatus)[keyof typeof FeedbackStatus];
+
+export const FEEDBACK_STATUS_LABEL: Record<FeedbackStatus, string> = {
+  OPEN: '待处理',
+  PROCESSING: '处理中',
+  RESOLVED: '已解决',
+  REJECTED: '已驳回',
+};
+
+/** 反馈动作类型。动作日志只增不改，时间线 = 对话流 + 状态流合一。 */
+export const FeedbackActionType = {
+  CREATE: 'CREATE', // 提交反馈
+  REPLY: 'REPLY', // 回复（双向对话，不流转状态）
+  START: 'START', // 接单（处理方认领）
+  RESOLVE: 'RESOLVE', // 标记解决
+  REJECT: 'REJECT', // 驳回（无法复现/非问题/重复）
+  REOPEN: 'REOPEN', // 提交人重开
+} as const;
+export type FeedbackActionType = (typeof FeedbackActionType)[keyof typeof FeedbackActionType];
+
+export const FEEDBACK_ACTION_LABEL: Record<FeedbackActionType, string> = {
+  CREATE: '提交了反馈',
+  REPLY: '回复',
+  START: '接单了',
+  RESOLVE: '标记为已解决',
+  REJECT: '驳回了反馈',
+  REOPEN: '重新打开了反馈',
+};
+
+/**
+ * 反馈状态动作规则（同 ISSUE_ACTION_RULES 哲学：前后端同一张表，
+ * 前端据此渲染按钮，后端强校验）。CREATE 产生初始态、REPLY 不流转，均不在表内。
+ */
+export const FEEDBACK_ACTION_RULES: Record<
+  Exclude<FeedbackActionType, 'CREATE' | 'REPLY'>,
+  { from: readonly FeedbackStatus[]; to: FeedbackStatus }
+> = {
+  START: { from: ['OPEN'], to: 'PROCESSING' },
+  RESOLVE: { from: ['OPEN', 'PROCESSING'], to: 'RESOLVED' },
+  REJECT: { from: ['OPEN', 'PROCESSING'], to: 'REJECTED' },
+  REOPEN: { from: ['RESOLVED', 'REJECTED'], to: 'PROCESSING' },
+};

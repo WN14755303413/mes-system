@@ -54,6 +54,9 @@ import AcceptanceReportPage from '@/pages/commissioning/acceptance/AcceptanceRep
 const CompanyDashboardPage = lazy(() => import('@/pages/dashboard/company/CompanyDashboardPage'));
 const ProjectDashboardPage = lazy(() => import('@/pages/dashboard/project/ProjectDashboardPage'));
 
+// M12 反馈中心：全员问题反馈闭环 + 站内通知
+import FeedbackPage from '@/pages/feedback/FeedbackPage';
+
 function LazyPage({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
@@ -93,6 +96,7 @@ const REAL_PAGES: Record<string, React.ReactNode> = {
   '/commissioning/record': <DebugRecordPage />,
   '/commissioning/issue': <DebugIssuePage />,
   '/commissioning/acceptance': <AcceptancePage />,
+  '/feedback': <FeedbackPage />,
   '/dashboard/company': (
     <LazyPage>
       <CompanyDashboardPage />

@@ -14,9 +14,11 @@ import { AuthModule } from './modules/auth/auth.module';
 import { BomModule } from './modules/bom/bom.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DebugModule } from './modules/debug/debug.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntegrationModule } from './modules/integration/integration.module';
 import { MaterialModule } from './modules/material/material.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { ProductionModule } from './modules/production/production.module';
 import { ProjectModule } from './modules/project/project.module';
 import { QualityModule } from './modules/quality/quality.module';
@@ -48,6 +50,8 @@ import { validateEnv } from './config/env';
     DebugModule,
     DashboardModule,
     IntegrationModule,
+    NotificationModule,
+    FeedbackModule,
   ],
   providers: [
     // 顺序即执行顺序，逐层收窄：
