@@ -297,7 +297,7 @@ export default function CompanyDashboardPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-5">
+    <div className="w-full space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">公司级看板</h1>

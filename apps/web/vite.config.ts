@@ -23,6 +23,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: Number(env.WEB_PORT ?? 5173),
+      // 项目在 /mnt/d（Windows 盘 drvfs）：WSL 的 inotify 收不到文件变更事件，
+      // 不开 polling 时改完代码 vite 仍 serve 旧的模块缓存，HMR 与刷新都拿不到新代码
+      watch: { usePolling: true, interval: 300 },
       // 开发期走同源代理，Cookie 无需跨域，与生产 nginx 反代行为一致
       proxy: {
         '/api': {

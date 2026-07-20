@@ -30,7 +30,7 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="w-full space-y-6">
       {/* 身份卡 */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
