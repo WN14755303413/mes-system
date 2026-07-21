@@ -31,6 +31,9 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: `http://localhost:${env.API_PORT ?? 3000}`,
           changeOrigin: true,
+          // 附加 X-Forwarded-For，让后端审计/限流能看到浏览器侧来源 IP，
+          // 而不是代理自身的 127.0.0.1——与生产 nginx 的转发行为对齐
+          xfwd: true,
         },
       },
     },

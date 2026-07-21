@@ -13,10 +13,17 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const logger = new Logger('Bootstrap');
 
-  // 信任最近一跳反代（生产是 nginx），否则 req.ip 恒为反代自身的地址，
-  // 基于 IP 的登录限流会把所有用户算作同一个来源，整个防护形同虚设。
-  // 只信任 1 跳：信任链再长，客户端就能自行伪造 X-Forwarded-For 绕过限流。
-  app.set('trust proxy', 1);
+  // 反代信任按「地址段」而非「跳数」：部署链路是 宿主机 nginx → web 容器 nginx → api，
+  // 共两跳；若只信任 1 跳，req.ip 会停在 docker 网桥网关（172.x.0.1），审计与登录限流
+  // 拿到的全是同一个网关地址。
+  //
+  // 信任 loopback + 172.16.0.0/12（docker 默认网桥地址池）意味着：解析 X-Forwarded-For
+  // 时跳过我方代理，停在第一个非代理地址——即客户端真实 IP。
+  //
+  // 刻意不信任 192.168/16 与 10/8：局域网客户端就在这些网段里，一旦信任，攻击者
+  // 可伪造 X-Forwarded-For 顶替自己的真实 IP，绕过按 IP 的登录限流。
+  // 若部署环境的反代不在默认网段（如 compose 网络落到 192.168.x），用 TRUST_PROXY 覆盖。
+  app.set('trust proxy', process.env.TRUST_PROXY ?? 'loopback,172.16.0.0/12');
 
   // 安全响应头。CSP 在 M1 接入前端后按需放宽。
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));

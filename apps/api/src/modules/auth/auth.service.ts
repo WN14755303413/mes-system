@@ -265,12 +265,23 @@ export class AuthService {
     return result.tokens;
   }
 
-  async logout(presented: string | undefined, user?: { id: string; username: string }): Promise<void> {
+  async logout(
+    presented: string | undefined,
+    user: { id: string; username: string } | undefined,
+    meta?: RequestMeta,
+  ): Promise<void> {
     if (presented) await this.tokens.revokeByToken(presented);
 
     if (user) {
       await this.prisma.auditLog.create({
-        data: { userId: user.id, username: user.username, action: 'auth.logout', success: true },
+        data: {
+          userId: user.id,
+          username: user.username,
+          action: 'auth.logout',
+          ip: meta?.ip,
+          userAgent: meta?.userAgent?.slice(0, 255),
+          success: true,
+        },
       });
     }
   }

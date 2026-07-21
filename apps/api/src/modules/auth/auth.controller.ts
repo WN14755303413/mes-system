@@ -149,9 +149,10 @@ export class AuthController {
   async logout(
     @Req() req: Request,
     @CurrentUser() user: CurrentUserDto,
+    @ReqMeta() meta: RequestMeta,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ ok: true }> {
-    await this.auth.logout(req.cookies?.[REFRESH_COOKIE] as string | undefined, user);
+    await this.auth.logout(req.cookies?.[REFRESH_COOKIE] as string | undefined, user, meta);
     this.clearAuthCookies(res);
     return { ok: true };
   }

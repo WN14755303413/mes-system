@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { Observable, tap } from 'rxjs';
 import { AUDIT_KEY, type AuditMeta } from '../decorators/audit.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { getClientIp } from '../utils/client-ip';
 import type { AuthenticatedRequest } from '../guards/jwt-auth.guard';
 
 /**
@@ -42,7 +43,7 @@ export class AuditInterceptor implements NestInterceptor {
 
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = req.user;
-    const ip = req.ip ?? req.socket?.remoteAddress ?? undefined;
+    const ip = getClientIp(req);
     const userAgent = (req.headers['user-agent'] as string | undefined)?.slice(0, 255);
 
     return next.handle().pipe(
